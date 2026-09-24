@@ -59,7 +59,7 @@ data class OutletEntity(
 
    // ---------- POS UI SETTINGS ----------
     val posType: String = "RESTAU",
-
+    val renewDate: String? = null,
     val showCategorySidebar: Boolean = true,
 
     // START SCREEN:

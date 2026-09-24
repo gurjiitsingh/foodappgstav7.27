@@ -104,6 +104,8 @@ import androidx.compose.runtime.collectAsState
 import com.it10x.foodappgstav7_27.auth.PosLoginViewModel
 import com.it10x.foodappgstav7_27.ui.login.PosLoginScreen
 import com.it10x.foodappgstav7_27.auth.PosSessionManager
+import com.it10x.foodappgstav7_27.core.PosRenewalManager
+import com.it10x.foodappgstav7_27.data.online.repository.PosRenewalSyncRepository
 import com.it10x.foodappgstav7_27.viewmodel.ProductSyncViewModel
 
 class MainActivity : ComponentActivity() {
@@ -360,6 +362,91 @@ class MainActivity : ComponentActivity() {
                     mutableStateOf(FirstSyncManager.isFirstSyncDone(context))
                 }
 
+                //RENEW CODE
+
+
+// =====================================================
+// POS RENEWAL CHECK
+// =====================================================
+
+                val posRenewalManager = remember {
+                    PosRenewalManager(
+                        PosRenewalSyncRepository(
+                            db = db,
+                            firestore = firestore
+                        )
+                    )
+                }
+
+                var renewalChecked by remember {
+                    mutableStateOf(false)
+                }
+
+                var renewalValid by remember {
+                    mutableStateOf(false)
+                }
+
+
+                LaunchedEffect(posRenewalManager) {
+
+                    renewalValid =
+                        posRenewalManager.checkAtStartup()
+
+                    renewalChecked = true
+                }
+
+
+// =====================================================
+// CHECKING RENEWAL
+// =====================================================
+
+                if (!renewalChecked) {
+
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+
+                        Text(
+                            text = "Checking ..."
+                        )
+                    }
+
+                    return@FoodPosTheme
+                }
+
+
+// =====================================================
+// RENEWAL EXPIRED
+// =====================================================
+
+                if (!renewalValid) {
+
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+
+                        Text(
+                            text = "POS EXPIRED"
+                        )
+                    }
+
+                    return@FoodPosTheme
+                }
+
+
+// =====================================================
+// RENEWAL VALID
+//
+// DO NOT RETURN HERE.
+//
+// The POS UI below this code will now open.
+// =====================================================
+
+// RENEW CODE END
+
+
                 if (!firstSyncDone) {
 
                     FirstAutoSyncScreen(
@@ -559,7 +646,10 @@ class MainActivity : ComponentActivity() {
                                     PosType.FAST_FOOD -> FastFoodMenu(
                                         navController = navController,
                                         drawerState = drawerState,
-                                        scope = scope
+                                        scope = scope,
+                                        onLogout = {
+                                            loggedIn = false
+                                        }
                                     )
 
                                     PosType.RESTAU -> {
@@ -657,34 +747,54 @@ class MainActivity : ComponentActivity() {
                                 val commonShape = RoundedCornerShape(8.dp)
                                 val commonHeight = 48.dp
 
+
+
+
                                 if (role == PosRole.MAIN) {
 
-                                    TopBarNavButton(
-                                        selected = currentRoute == "tables",
-                                        icon = Icons.Default.TableBar,
-                                        description = "",
-                                        size = commonHeight,
-                                        shape = commonShape,
-                                        onClick = {
-                                            navController.navigate("tables") { launchSingleTop = true }
-                                        }
-                                    )
+                                    val isFastFood = posType == PosType.FAST_FOOD
 
-                                    Spacer(Modifier.width(6.dp))
+                                    // TABLES
+                                    if (!isFastFood) {
+                                        TopBarNavButton(
+                                            selected = currentRoute == "tables",
+                                            icon = Icons.Default.TableBar,
+                                            description = "",
+                                            size = commonHeight,
+                                            shape = commonShape,
+                                            onClick = {
+                                                navController.navigate("tables") {
+                                                    launchSingleTop = true
+                                                }
+                                            }
+                                        )
 
+                                        Spacer(Modifier.width(6.dp))
+                                    }
+
+                                    // POS
                                     TopBarNavButton(
-                                        selected = currentRoute == "pos",
+                                        selected =
+                                            if (isFastFood)
+                                                currentRoute == "fastfood"
+                                            else
+                                                currentRoute == "pos",
                                         icon = Icons.Default.PointOfSale,
                                         description = "",
                                         size = commonHeight,
                                         shape = commonShape,
                                         onClick = {
-                                            navController.navigate("pos") { launchSingleTop = true }
+                                            navController.navigate(
+                                                if (isFastFood) "fastfood_pos" else "pos"
+                                            ) {
+                                                launchSingleTop = true
+                                            }
                                         }
                                     )
 
                                     Spacer(Modifier.width(6.dp))
 
+                                    // LOCAL ORDERS
                                     TopBarNavButton(
                                         selected = currentRoute == "local_orders",
                                         icon = Icons.Default.ReceiptLong,
@@ -692,7 +802,9 @@ class MainActivity : ComponentActivity() {
                                         size = commonHeight,
                                         shape = commonShape,
                                         onClick = {
-                                            navController.navigate("local_orders") { launchSingleTop = true }
+                                            navController.navigate("local_orders") {
+                                                launchSingleTop = true
+                                            }
                                         }
                                     )
 
@@ -798,36 +910,7 @@ class MainActivity : ComponentActivity() {
             )
         }
     }
-//    @Composable
-//    fun StopSoundButton() {
-//
-//        val context = LocalContext.current
-//        val commonShape = RoundedCornerShape(8.dp)
-//        val commonHeight = 48.dp
-//
-//        IconButton(
-//            onClick = {
-//
-//                val intent = Intent("STOP_RINGTONE").apply {
-//                    setPackage(context.packageName)
-//                }
-//
-//                context.sendBroadcast(intent)
-//            },
-//            modifier = Modifier
-//                .size(commonHeight)
-//                .background(
-//                    MaterialTheme.colorScheme.error,
-//                    shape = commonShape
-//                )
-//        ) {
-//            Icon(
-//                imageVector = Icons.Default.VolumeOff,
-//                contentDescription = "Stop Sound",
-//                tint = Color.White
-//            )
-//        }
-//    }
+
 
 
 }

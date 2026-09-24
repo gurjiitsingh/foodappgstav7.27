@@ -151,6 +151,7 @@ fun RetailPosScreen(
 
  //   val posViewModel: PosViewModel = viewModel()
 
+    //AUTO TABLE WINDOW OPEN
     LaunchedEffect(Unit) {
         cartViewModel.uiEvent.collect { event ->
             when (event) {

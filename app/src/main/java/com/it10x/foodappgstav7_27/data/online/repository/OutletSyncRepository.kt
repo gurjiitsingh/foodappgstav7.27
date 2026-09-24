@@ -98,7 +98,7 @@ class OutletSyncRepository(
             // ---------- NEW: DEFAULT CURRENCY ----------
 
             posType = data["posType"] as? String ?: "RESTAU",
-
+            renewDate = data["renewDate"] as? String,
             showCategorySidebar =
             data["showCategorySidebar"] as? Boolean ?: true,
 

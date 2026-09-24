@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import com.google.firebase.firestore.FirebaseFirestore
 import com.it10x.foodappgstav7_27.data.online.repository.OrderCounterSyncRepository
+import com.it10x.foodappgstav7_27.data.online.repository.PosRenewalSyncRepository
 
 class ProductSyncViewModel(app: Application) : AndroidViewModel(app) {
 
@@ -100,5 +101,12 @@ class ProductSyncViewModel(app: Application) : AndroidViewModel(app) {
             }
         }
     }
+
+    private val posRenewalRepo =
+        PosRenewalSyncRepository(
+            db,
+            FirebaseFirestore.getInstance()
+        )
+
 
 }

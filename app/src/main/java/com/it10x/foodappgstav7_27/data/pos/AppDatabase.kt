@@ -47,8 +47,9 @@ import androidx.room.Entity
         PosBusinessDayEntity::class,
         OrderCounterEntity::class,
         OrderSerialMapEntity::class,
+        PosRenewalEntity::class,
     ],
-    version = 150,              // ⬆️ increment version since schema changed
+    version = 153,              // ⬆️ increment version since schema changed
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -95,5 +96,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun orderCounterDao(): OrderCounterDao
 
     abstract fun orderSerialMapDao(): OrderSerialMapDao
+
+    abstract fun posRenewalDao(): PosRenewalDao
 
 }

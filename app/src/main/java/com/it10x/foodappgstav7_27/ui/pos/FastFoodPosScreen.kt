@@ -1,7 +1,7 @@
 package com.it10x.foodappgstav7_27.ui.pos
 
 
-import android.app.Application
+import android.util.Log
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -31,6 +31,7 @@ import com.it10x.foodappgstav7_27.ui.kitchen.KitchenScreen
 
 import com.it10x.foodappgstav7_27.ui.kitchen.KitchenViewModel
 import android.widget.Toast
+import androidx.compose.foundation.border
 
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -40,6 +41,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DeliveryDining
 import androidx.compose.material.icons.filled.LocalShipping
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Receipt
 import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material.icons.filled.ShoppingBag
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -58,7 +60,6 @@ import com.it10x.foodappgstav7_27.ui.kitchen.KitchenViewModelFactory
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.text.font.FontWeight
 import com.it10x.foodappgstav7_27.data.pos.entities.VirtualTableEntity
-import com.it10x.foodappgstav7_27.data.pos.entities.config.OutletEntity
 import com.it10x.foodappgstav7_27.data.pos.viewmodel.ProductsLocalViewModel
 import com.it10x.foodappgstav7_27.data.pos.viewmodel.ProductsLocalViewModelFactory
 import com.it10x.foodappgstav7_27.ui.components.PosTouchKeyboard
@@ -69,6 +70,13 @@ import com.it10x.foodappgstav7_27.viewmodel.VirtualTableViewModel
 
 import com.it10x.foodappgstav7_27.data.print.OutletMapper
 import com.it10x.foodappgstav7_27.data.print.OutletInfo
+import com.it10x.foodappgstav7_27.ui.bill.BillViewModel
+import com.it10x.foodappgstav7_27.ui.bill.BillViewModelFactory
+import com.it10x.foodappgstav7_27.ui.kitchen.KitchenScreenPhone
+import com.it10x.foodappgstav7_27.ui.theme.PosTheme
+import kotlinx.coroutines.launch
+import com.it10x.foodappgstav7_27.data.pos.viewmodel.FAVORITES_CATEGORY_ID
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FastFoodPosScreen(
@@ -96,30 +104,107 @@ fun FastFoodPosScreen(
     val configuration = LocalConfiguration.current
     val isPhone = configuration.screenWidthDp < 600
 
-    var orderType by remember { mutableStateOf("DINE_IN") }
+//    var orderType by remember { mutableStateOf("DINE_IN") }
+
+//    var orderType by remember {
+//        mutableStateOf(sessionOrderType)
+//    }
+
+//    LaunchedEffect(sessionOrderType) {
+//        orderType = sessionOrderType
+//    }
+
+    val sessionOrderType by posSessionViewModel.orderType.collectAsState()
+
+    var orderType by remember {
+        mutableStateOf(
+            sessionOrderType ?: "TAKEAWAY"
+        )
+    }
+
+    LaunchedEffect(sessionOrderType) {
+        orderType = sessionOrderType ?: "TAKEAWAY"
+    }
+
+
+
+
 
     val sessionId by cartViewModel.sessionKey.collectAsState()
+
     val tableId1 by posSessionViewModel.tableId.collectAsState()
-    val tableId =  tableId1 ?:""
-    // val tables by tableVm.tables.collectAsState()
+    val tableId = tableId1 ?: ""
+
+//    Log.d(
+//        "POS_SESSION",
+//        "PosScreen VM = ${System.identityHashCode(posSessionViewModel)}, tableId=$tableId1"
+//    )
+
+
     val tables by posTableViewModel.tables.collectAsState()
 
     val tableVm: PosTableViewModel = viewModel()
+
+
+
     val virtualTableViewModel: VirtualTableViewModel = viewModel()
-    //val virtualTables by virtualTableViewModel.tables.collectAsState()
 
-    val selectedTableName1 = tables
-        .firstOrNull { it.table.id == tableId }
-        ?.table
-        ?.tableName
- var selectedTableName = selectedTableName1 ?: ""
+    val virtualTables by virtualTableViewModel.tables.collectAsState()
 
-    var showTableSelector by rememberSaveable() {
+    LaunchedEffect(Unit) {
+
+        // Same action as clicking TAKEAWAY button
+
+        orderType = "TAKEAWAY"
+
+        val newTable =
+            virtualTableViewModel.createNew(
+                "TAKEAWAY"
+            )
+
+        posSessionViewModel.setTable(
+            tableId = newTable.id,
+            tableName = newTable.tableName,
+            orderType = "TAKEAWAY"
+        )
+
+        Log.d(
+            "POS_ORDER",
+            "AUTO TAKEAWAY selected: ${newTable.tableName}, id=${newTable.id}"
+        )
+    }
+
+// --------------------------------------------------
+// SELECTED TABLE NAME
+// --------------------------------------------------
+
+    val selectedTableName = when (orderType) {
+
+        "DINE_IN" -> {
+            tables
+                .firstOrNull { it.table.id == tableId }
+                ?.table
+                ?.tableName
+                ?: ""
+        }
+
+        "TAKEAWAY", "DELIVERY" -> {
+            virtualTables
+                .firstOrNull { it.id == tableId }
+                ?.tableName
+                ?: ""
+        }
+
+        else -> ""
+    }
+
+    var showTableSelector by rememberSaveable {
         mutableStateOf(false)
     }
 
-//    var selectedTable by remember { mutableStateOf<VirtualTableEntity?>(null) }
-//    var showTableSelector by remember { mutableStateOf(false) }
+
+
+
 
 
 
@@ -140,27 +225,46 @@ fun FastFoodPosScreen(
     }
 
 
+    LaunchedEffect(Unit) {
+        virtualTableViewModel.checkAndResetForNewDay()
+    }
+    //   val posViewModel: PosViewModel = viewModel()
 
- //   val posViewModel: PosViewModel = viewModel()
-
+    //AUTO TABLE WINDOW OPEN
     LaunchedEffect(Unit) {
         cartViewModel.uiEvent.collect { event ->
             when (event) {
 
                 CartUiEvent.SessionRequired -> {
-                    if (orderType == "DINE_IN") {
-                        showTableSelector = true
-                    } else {
-                        Toast.makeText(
-                            context,
-                            "Order session not ready. Please retry.",
-                            Toast.LENGTH_SHORT
-                        ).show()
+                    when (orderType) {
+
+                        "DINE_IN" -> {
+                            showTableSelector = true
+                        }
+
+                        "TAKEAWAY", "DELIVERY" -> {
+                            showTableSelector = true
+                        }
+
+                        else -> {
+                            Toast.makeText(
+                                context,
+                                "Order session not ready. Please retry.",
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        }
                     }
                 }
 
                 CartUiEvent.TableRequired -> {
-                    showTableSelector = true
+                    when (orderType) {
+
+                        "DINE_IN",
+                        "TAKEAWAY",
+                        "DELIVERY" -> {
+                            showTableSelector = true
+                        }
+                    }
                 }
             }
         }
@@ -175,14 +279,22 @@ fun FastFoodPosScreen(
 
 
 
-    var selectedCatId by remember { mutableStateOf<String?>(null) }
+    // var selectedCatId by remember { mutableStateOf<String?>(null) }
 
-    LaunchedEffect(categories) {
-        if (selectedCatId == null && categories.isNotEmpty()) {
-            val firstId = categories.first().id
-            selectedCatId = firstId
-            productsViewModel.setCategory(firstId)  // 🔥 VERY IMPORTANT
-        }
+    var selectedCatId by remember {
+        mutableStateOf<String?>(FAVORITES_CATEGORY_ID)
+    }
+
+//    LaunchedEffect(categories) {
+//        if (selectedCatId == null && categories.isNotEmpty()) {
+//            val firstId = categories.first().id
+//            selectedCatId = firstId
+//            productsViewModel.setCategory(firstId)  // 🔥 VERY IMPORTANT
+//        }
+//    }
+
+    LaunchedEffect(Unit) {
+        productsViewModel.setCategory(FAVORITES_CATEGORY_ID)
     }
 
     LaunchedEffect(Unit) { tableVm.loadTables() }
@@ -211,7 +323,7 @@ fun FastFoodPosScreen(
     }
 
     var outletSettings by remember {
-        mutableStateOf<OutletEntity?>(null)
+        mutableStateOf<com.it10x.foodappgstav7_27.data.pos.entities.config.OutletEntity?>(null)
     }
 
     LaunchedEffect(Unit) {
@@ -221,19 +333,40 @@ fun FastFoodPosScreen(
             outletSettings?.showCategorySidebar ?: true
     }
 
+// SET DEFAULT ORDER TYPE FOR RETAIL / FAST FOOD
+    LaunchedEffect(outletSettings) {
+
+        val posType = outletSettings?.posType
+            ?: return@LaunchedEffect
+
+        if (
+            (posType == "RETAIL" || posType == "FAST_FOOD") &&
+            posSessionViewModel.orderType.value == "DINE_IN"
+        ) {
+            posSessionViewModel.setOrderType("TAKEAWAY")
+        }
+    }
+
     val outletInfo = remember(outletSettings) {
         OutletMapper.fromEntity(outletSettings)
     }
 
     LaunchedEffect(orderType, tableId) {
         if (!tableId.isNullOrBlank()) {
-            cartViewModel.initSession(orderType, tableId, tableName)
+            //  cartViewModel.initSession(orderType, tableId)
+
+            cartViewModel.initSession(
+                orderType = orderType,
+                tableId = tableId,
+                tableName = tableName,
+            )
+
         }
     }
 
     LaunchedEffect(orderType) {
         searchQuery = ""
-       // productsViewModel.setSearchQuery("")
+        // productsViewModel.setSearchQuery("")
         showSearchKeyboard = false
     }
 
@@ -242,6 +375,27 @@ fun FastFoodPosScreen(
             virtualTableViewModel.setOrderType(orderType)
         }
     }
+
+    val application = context.applicationContext as android.app.Application
+    // ---------------- BILL ITEMS ----------------
+    val billViewModel: BillViewModel = viewModel(
+        key = "BillVM_${tableId ?: orderType}",
+        factory = BillViewModelFactory(
+            application = application,
+            tableId = tableId ?: orderType,
+            tableName = tableId,
+            orderType = orderType,
+            posSessionViewModel = posSessionViewModel,
+        )
+    )
+
+    // ✅ Bill button depends ONLY on bill items
+    val BillItems by billViewModel
+        .getDoneItems(orderRef = tableId ?: orderType, orderType = orderType)
+        .collectAsState(initial = emptyList())
+    val canOpenBill = BillItems.isNotEmpty()
+
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -273,7 +427,7 @@ fun FastFoodPosScreen(
                 )
             }
 
-
+            val scope = rememberCoroutineScope()
             // ---------- PRODUCTS ----------
             Column(
                 modifier = Modifier
@@ -294,83 +448,118 @@ fun FastFoodPosScreen(
                             .padding(bottom = 8.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.CenterVertically
-                    ) {
+                    )
+                    {
 
                         // -------- ORDER TYPE ICON BUTTONS PHONE--------
 
                         // 🍽️ Dine In (Table)
-                        IconButton(
-                            onClick = {
-                                orderType = "DINE_IN"
-                                showTableSelector = true
-                            },
-                            modifier = Modifier
-                                .size(commonHeight)
-                                .background(
-                                    if (orderType == "DINE_IN") MaterialTheme.colorScheme.primary
-                                    else MaterialTheme.colorScheme.surfaceVariant,
-                                    shape = commonShape
-                                )
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Restaurant,
-                                contentDescription = "Dine In",
-                                tint = if (orderType == "DINE_IN")
-                                    MaterialTheme.colorScheme.onPrimary
-                                else
-                                    MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-
-
+//                        if (posType == "RESTAU" || posType == "FAST_FOOD") {
+//                            IconButton(
+//                                onClick = {
+//                                    orderType = "DINE_IN"
+//                                    showTableSelector = true
+//                                },
+//                                modifier = Modifier
+//                                    .size(commonHeight)
+//                                    .background(
+//                                        if (orderType == "DINE_IN") MaterialTheme.colorScheme.primary
+//                                        else MaterialTheme.colorScheme.surfaceVariant,
+//                                        shape = commonShape
+//                                    )
+//                            ) {
+//                                Icon(
+//                                    imageVector = Icons.Default.Restaurant,
+//                                    contentDescription = "Dine In",
+//                                    tint = if (orderType == "DINE_IN")
+//                                        MaterialTheme.colorScheme.onPrimary
+//                                    else
+//                                        MaterialTheme.colorScheme.onSurfaceVariant
+//                                )
+//                            }
+//
+//                        }
                         // 🛍️ Takeaway icon
                         IconButton(
                             onClick = {
+
                                 orderType = "TAKEAWAY"
-                              //  posSessionViewModel.clearTable()
-                                showTableSelector = true
+
+                                scope.launch {
+
+                                    val newTable =
+                                        virtualTableViewModel.createNew(
+                                            "TAKEAWAY"
+                                        )
+
+                                    posSessionViewModel.setTable(
+                                        tableId = newTable.id,
+                                        tableName = newTable.tableName,
+                                        orderType = "TAKEAWAY"
+                                    )
+                                }
+
                             },
                             modifier = Modifier
                                 .size(commonHeight)
                                 .background(
-                                    if (orderType == "TAKEAWAY") MaterialTheme.colorScheme.primary
-                                    else MaterialTheme.colorScheme.surfaceVariant,
+                                    if (orderType == "TAKEAWAY")
+                                        MaterialTheme.colorScheme.primary
+                                    else
+                                        MaterialTheme.colorScheme.surfaceVariant,
                                     shape = commonShape
                                 )
                         ) {
                             Icon(
-                                imageVector = Icons.Default.ShoppingBag, // 🛍️
+                                imageVector = Icons.Default.ShoppingBag,
                                 contentDescription = "Takeaway",
-                                tint = if (orderType == "TAKEAWAY")
-                                    MaterialTheme.colorScheme.onPrimary
-                                else
-                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                tint =
+                                    if (orderType == "TAKEAWAY")
+                                        MaterialTheme.colorScheme.onPrimary
+                                    else
+                                        MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
 
                         // 🚚 Delivery icon
                         IconButton(
                             onClick = {
+
                                 orderType = "DELIVERY"
-                              //  posSessionViewModel.clearTable()
-                                showTableSelector = true
+
+                                scope.launch {
+
+                                    val newTable =
+                                        virtualTableViewModel.createNew(
+                                            "DELIVERY"
+                                        )
+
+                                    posSessionViewModel.setTable(
+                                        tableId = newTable.id,
+                                        tableName = newTable.tableName,
+                                        orderType = "DELIVERY"
+                                    )
+                                }
+
                             },
                             modifier = Modifier
                                 .size(commonHeight)
                                 .background(
-                                    if (orderType == "DELIVERY") MaterialTheme.colorScheme.primary
-                                    else MaterialTheme.colorScheme.surfaceVariant,
+                                    if (orderType == "DELIVERY")
+                                        MaterialTheme.colorScheme.primary
+                                    else
+                                        MaterialTheme.colorScheme.surfaceVariant,
                                     shape = commonShape
                                 )
                         ) {
                             Icon(
-                               imageVector = Icons.Default.LocalShipping, // 🚚
-                               // imageVector = Icons.Default.DeliveryDining,
+                                imageVector = Icons.Default.LocalShipping,
                                 contentDescription = "Delivery",
-                                tint = if (orderType == "DELIVERY")
-                                    MaterialTheme.colorScheme.onPrimary
-                                else
-                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                tint =
+                                    if (orderType == "DELIVERY")
+                                        MaterialTheme.colorScheme.onPrimary
+                                    else
+                                        MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
 
@@ -387,6 +576,59 @@ fun FastFoodPosScreen(
                                 tint = MaterialTheme.colorScheme.onPrimary
                             )
                         }
+                        IconButton(
+                            onClick = {
+                                showKitchen = true
+                            },
+                            modifier = Modifier
+                                .size(commonHeight)
+                                .background(
+                                    MaterialTheme.colorScheme.surfaceVariant,
+                                    shape = commonShape
+                                )
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.ShoppingCart,
+                                contentDescription = "Cart",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+
+
+                        // 🧾 Bill Button
+                        // ---------------- BILL ITEMS ----------------
+
+
+                        Button(
+                            modifier = Modifier
+                                .size(56.dp)
+                                .padding(4.dp),
+                            enabled = canOpenBill,
+                            onClick = {
+                                if (!canOpenBill) return@Button
+                                showBill = true
+                            },
+                            contentPadding = PaddingValues(0.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor =
+                                    if (canOpenBill) Color(0xFF66BB6A) // 🟢 Green when bill exists
+                                    else Color(0xFFBDBDBD),            // ⚪ Grey when no bill
+                                contentColor = Color.White,
+                                disabledContainerColor = Color(0xFFBDBDBD),
+                                disabledContentColor = Color.White
+                            ),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Receipt,
+                                contentDescription = "Bill",
+                                tint = Color.White,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+
+
+
                     }
 
                     // ===== PHONE ROW 2 : TABLE + SEARCH + CLEAR =====
@@ -406,7 +648,7 @@ fun FastFoodPosScreen(
                         ) {
                             Box(
                                 modifier = Modifier
-                                   // .weight(1f)
+                                    // .weight(1f)
                                     .height(commonHeight)
                                     .clickable { showSearchKeyboard = true }
                             ) {
@@ -457,6 +699,8 @@ fun FastFoodPosScreen(
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
+
+
                     }
                 }
 
@@ -464,6 +708,7 @@ fun FastFoodPosScreen(
 
 
                 if (!isPhone) {
+
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -471,107 +716,161 @@ fun FastFoodPosScreen(
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // -------- ORDER TYPE ICON BUTTONS TABLET--------
 
-                        // 🍽️ Dine In (Table)
+                        // ================= COMMON COLORS =================
+                        val selectedBg = MaterialTheme.colorScheme.primary
+                        val selectedContent = MaterialTheme.colorScheme.onPrimary
+
+                        val tableSelectedShowText = PosTheme.product.productCardText
+                        val tableSelectedShowBg = PosTheme.product.productCardBg
+
+                        val unselectedBg = Color(0xFFF1F5F9)
+                        val unselectedContent = Color(0xFF475569)
+
+                        val borderColor = Color(0xFFE2E8F0)
+
+                        // ================= DINE IN =================
+                        //                        if (posType == "RESTAU" || posType == "FAST_FOOD") {
+//                            IconButton(
+//                                onClick = {
+//                                    orderType = "DINE_IN"
+//                                    showTableSelector = true
+//                                },
+//                                modifier = Modifier
+//                                    .size(commonHeight)
+//                                    .background(
+//                                        if (orderType == "DINE_IN") MaterialTheme.colorScheme.primary
+//                                        else MaterialTheme.colorScheme.surfaceVariant,
+//                                        shape = commonShape
+//                                    )
+//                            ) {
+//                                Icon(
+//                                    imageVector = Icons.Default.Restaurant,
+//                                    contentDescription = "Dine In",
+//                                    tint = if (orderType == "DINE_IN")
+//                                        MaterialTheme.colorScheme.onPrimary
+//                                    else
+//                                        MaterialTheme.colorScheme.onSurfaceVariant
+//                                )
+//                            }
+//
+//                        }
+
+                        // ================= TAKEAWAY =================
                         IconButton(
                             onClick = {
-                                orderType = "DINE_IN"
-                                showTableSelector = true
+                                scope.launch {
+
+                                    val newTable =
+                                        virtualTableViewModel.createNew(
+                                            type = "TAKEAWAY"
+                                        )
+
+                                    orderType = "TAKEAWAY"
+
+                                    posSessionViewModel.setTable(
+                                        tableId = newTable.id,
+                                        tableName = newTable.tableName,
+                                        orderType = "TAKEAWAY",
+                                    )
+
+                                    Log.d(
+                                        "POS_ORDER",
+                                        "TAKEAWAY selected: ${newTable.tableName}"
+                                    )
+                                }
                             },
                             modifier = Modifier
                                 .size(commonHeight)
                                 .background(
-                                    if (orderType == "DINE_IN") MaterialTheme.colorScheme.primary
-                                    else MaterialTheme.colorScheme.surfaceVariant,
+                                    color = if (orderType == "TAKEAWAY")
+                                        selectedBg
+                                    else
+                                        unselectedBg,
+                                    shape = commonShape
+                                )
+                                .border(
+                                    1.dp,
+                                    if (orderType == "TAKEAWAY")
+                                        selectedBg
+                                    else
+                                        borderColor,
                                     shape = commonShape
                                 )
                         ) {
                             Icon(
-                                imageVector = Icons.Default.Restaurant,
-                                contentDescription = "Dine In",
-                                tint = if (orderType == "DINE_IN")
-                                    MaterialTheme.colorScheme.onPrimary
-                                else
-                                    MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-
-
-                        // 🛍️ Takeaway icon
-                        IconButton(
-                            onClick = {
-                                orderType = "TAKEAWAY"
-                               // posSessionViewModel.clearTable()
-                                showTableSelector = true
-                            },
-                            modifier = Modifier
-                                .size(commonHeight)
-                                .background(
-                                    if (orderType == "TAKEAWAY") MaterialTheme.colorScheme.primary
-                                    else MaterialTheme.colorScheme.surfaceVariant,
-                                    shape = commonShape
-                                )
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.ShoppingBag, // 🛍️
+                                imageVector = Icons.Default.ShoppingBag,
                                 contentDescription = "Takeaway",
                                 tint = if (orderType == "TAKEAWAY")
-                                    MaterialTheme.colorScheme.onPrimary
+                                    selectedContent
                                 else
-                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                    unselectedContent
                             )
                         }
 
-                        // 🚚 Delivery icon
+
+// ================= DELIVERY =================
                         IconButton(
                             onClick = {
-                                orderType = "DELIVERY"
-                              //  posSessionViewModel.clearTable()
-                                showTableSelector = true
+                                scope.launch {
+
+                                    val newTable =
+                                        virtualTableViewModel.createNew(
+                                            type = "DELIVERY"
+                                        )
+
+                                    orderType = "DELIVERY"
+
+                                    posSessionViewModel.setTable(
+                                        tableId = newTable.id,
+                                        tableName = newTable.tableName,
+                                        orderType = "DELIVERY",
+                                    )
+
+                                    Log.d(
+                                        "POS_ORDER",
+                                        "shown in tab : ${newTable.tableName}"
+                                    )
+                                }
                             },
                             modifier = Modifier
                                 .size(commonHeight)
                                 .background(
-                                    if (orderType == "DELIVERY") MaterialTheme.colorScheme.primary
-                                    else MaterialTheme.colorScheme.surfaceVariant,
+                                    color = if (orderType == "DELIVERY")
+                                        selectedBg
+                                    else
+                                        unselectedBg,
+                                    shape = commonShape
+                                )
+                                .border(
+                                    1.dp,
+                                    if (orderType == "DELIVERY")
+                                        selectedBg
+                                    else
+                                        borderColor,
                                     shape = commonShape
                                 )
                         ) {
                             Icon(
-                                imageVector = Icons.Default.LocalShipping, // 🚚
-                                //imageVector = Icons.Default.DeliveryDining,
+                                imageVector = Icons.Default.LocalShipping,
                                 contentDescription = "Delivery",
                                 tint = if (orderType == "DELIVERY")
-                                    MaterialTheme.colorScheme.onPrimary
+                                    selectedContent
                                 else
-                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                    unselectedContent
                             )
                         }
 
 
 
-                        // -------- CATEGORY BUTTON --------
-                        IconButton(
-                            onClick = { showCategorySelector = true },
-                            modifier = Modifier
-                                .size(commonHeight)
-                                .background(MaterialTheme.colorScheme.secondary, shape = commonShape)
-
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Category,
-                                contentDescription = "Category",
-                                tint = MaterialTheme.colorScheme.onSecondary
-                            )
-                        }
-
-                        // -------- SEARCH FIELD + CLEAR --------
+                        // ================= SEARCH + ACTIONS =================
                         Row(
                             modifier = Modifier.weight(1f),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
+
+                            // 🔍 SEARCH FIELD (CLICKABLE)
                             Box(
                                 modifier = Modifier
                                     .weight(1f)
@@ -582,7 +881,7 @@ fun FastFoodPosScreen(
                                     value = searchQuery,
                                     onValueChange = {},
                                     modifier = Modifier.fillMaxSize(),
-                                    placeholder = { Text("Search...") },
+                                    placeholder = { Text("Search Fast food...") },
                                     singleLine = true,
                                     readOnly = true,
                                     enabled = false,
@@ -590,6 +889,7 @@ fun FastFoodPosScreen(
                                 )
                             }
 
+                            // ❌ CLEAR
                             IconButton(
                                 onClick = {
                                     searchQuery = ""
@@ -597,35 +897,52 @@ fun FastFoodPosScreen(
                                 },
                                 modifier = Modifier
                                     .size(commonHeight)
-                                    .background(MaterialTheme.colorScheme.surfaceVariant, shape = commonShape)
+                                    .background(unselectedBg, shape = commonShape)
+                                    .border(1.dp, borderColor, shape = commonShape)
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Close,
                                     contentDescription = "Clear",
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    tint = unselectedContent
                                 )
                             }
 
-                            // ⋮ More Button
+                            // ⋮ MORE
                             IconButton(
                                 onClick = {
-                                    // 🔥 Trigger the More handler
                                     productsViewModel.showMoreMatches(true)
                                 },
                                 modifier = Modifier
                                     .size(commonHeight)
-                                    .background(MaterialTheme.colorScheme.surfaceVariant, shape = commonShape)
+                                    .background(unselectedBg, shape = commonShape)
+                                    .border(1.dp, borderColor, shape = commonShape)
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.MoreVert,
                                     contentDescription = "More Options",
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    tint = unselectedContent
                                 )
                             }
 
-                            // -------- CURRENT ORDER CHIP --------
-                            // -------- CURRENT ORDER CHIP --------
-                            Spacer(Modifier.width(4.dp))
+
+                            // ================= CATEGORY (CTA) =================
+                            IconButton(
+                                onClick = { showCategorySelector = true },
+                                modifier = Modifier
+                                    .size(commonHeight)
+                                    .background(
+                                        PosTheme.accent.cartAddBg,
+                                        shape = commonShape
+                                    )
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Category,
+                                    contentDescription = "Category",
+                                    tint = PosTheme.accent.cartAddText
+                                )
+                            }
+                            // ================= CURRENT ORDER CHIP =================
+                            // Spacer(Modifier.width(2.dp))
 
                             OutlinedButton(
                                 onClick = { showTableSelector = true },
@@ -634,19 +951,16 @@ fun FastFoodPosScreen(
                                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
                                 border = BorderStroke(
                                     1.dp,
-                                    MaterialTheme.colorScheme.primary
+                                    tableSelectedShowText
                                 )
                             ) {
                                 Text(
                                     text = tableName ?: "",
                                     style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.primary,
+                                    color = tableSelectedShowText,
                                     fontWeight = FontWeight.SemiBold
                                 )
                             }
-
-
-
                         }
                     }
                 }
@@ -658,14 +972,14 @@ fun FastFoodPosScreen(
                 // ---------- PRODUCT LIST ----------
                 ProductList(
                     filteredProducts = filteredProducts,
-                  //  variants = variants,
+                    //  variants = variants,
                     cartViewModel = cartViewModel,
                     tableViewModel = tableVm,
                     tableNo = tableId,  // fallback if null
                     posSessionViewModel = posSessionViewModel,  // 🔑 pass it
                     onProductAdded = {
                         searchQuery = ""
-                       // productsViewModel.setSearchQuery("")
+                        // productsViewModel.setSearchQuery("")
                     },
                     currencyCode = outletInfo.currencyCode,
                     localeTag = outletInfo.localeTag,
@@ -688,7 +1002,7 @@ fun FastFoodPosScreen(
 
 
 
-                val virtualTables by virtualTableViewModel.tables.collectAsState()
+
 
                 LaunchedEffect(orderType) {
                     if (orderType == "TAKEAWAY" || orderType == "DELIVERY") {
@@ -702,21 +1016,7 @@ fun FastFoodPosScreen(
                     LaunchedEffect(orderType) {
                         virtualTableViewModel.deleteOldTables(orderType)
                     }
-//                    VirtualTableSelectorGrid(
-//                        tables = virtualTables,
-//                        selectedTableId = tableId,
-//                        onAddNew = {
-//                            virtualTableViewModel.createNew(orderType)
-//                        },
-//                        onTableSelected = { table ->
-//                            posSessionViewModel.setTable(
-//                                tableId = table.id,
-//                                tableName = table.tableName
-//                            )
-//                            showTableSelector = false
-//                        },
-//                        onDismiss = { showTableSelector = false }
-//                    )
+
                 }
 
 
@@ -751,15 +1051,14 @@ fun FastFoodPosScreen(
                         .width(190.dp)
                         .fillMaxHeight()
                 ) {
-
                     // ---------- CART (ALWAYS VISIBLE) ----------
                     RightPanel(
                         cartViewModel = cartViewModel,
                         ordersViewModel = ordersViewModel,
                         tableViewModel = tableVm,
                         orderType = orderType,
-                       // tableNo = tableId ?: orderType,
-                       // tableNo = if (tableId.isNotBlank()) tableId else orderType,
+                        // tableNo = tableId ?: orderType,
+                        // tableNo = if (tableId.isNotBlank()) tableId else orderType,
                         tableNo = tableId.ifBlank { orderType },
                         tableName = selectedTableName,
                         paymentType = paymentType,
@@ -848,40 +1147,11 @@ fun FastFoodPosScreen(
 
 
 
-    if (isPhone && showCartSheet) {
 
-        val sheetState = rememberModalBottomSheetState(
-            skipPartiallyExpanded = true // 🔑 KEY FIX
-        )
-
-        ModalBottomSheet(
-            sheetState = sheetState,
-            onDismissRequest = { showCartSheet = false }
-        ) {
-            RightPanel(
-                cartViewModel = cartViewModel,
-                ordersViewModel = ordersViewModel,
-                tableViewModel = tableVm,
-                orderType = orderType,
-                tableNo = tableId ?: orderType,
-                tableName = selectedTableName,
-                paymentType = paymentType,
-                posSessionViewModel = posSessionViewModel,
-                onPaymentChange = { paymentType = it },
-                onOrderPlaced = { },
-                onOpenKitchen = { showKitchen = true },
-                onOpenBill = { showBill = true },
-                isMobile = true,
-                onClose = { showCartSheet = false },
-                outletInfo = outletInfo,
-                repository = repository
-            )
-        }
-    }
 
     // ================= KITCHEN POPUP =================
     if (showKitchen && sessionId != null) {
-      //  val kitchenKey by cartViewModel.sessionKey.collectAsState()
+        //  val kitchenKey by cartViewModel.sessionKey.collectAsState()
         val kitchenTitle = when (orderType) {
             "DINE_IN" -> "Table ${tableId ?: ""}"
             "TAKEAWAY" -> "Takeaway"
@@ -889,16 +1159,16 @@ fun FastFoodPosScreen(
             else -> sessionId
         }
 
-        val kitchenViewModel: KitchenViewModel = viewModel(
+        val kitchenViewModel: KitchenViewModel = androidx.lifecycle.viewmodel.compose.viewModel(
             key = "KitchenVM_${sessionId ?: orderType}",
             factory = KitchenViewModelFactory(
-                app = LocalContext.current.applicationContext as Application,
+                app = LocalContext.current.applicationContext as android.app.Application,
                 tableId = tableId ?: return,
                 tableName = selectedTableName ?: "",
                 sessionId = sessionId!!,
                 orderType = orderType,
                 repository = repository,
-                 )
+            )
         )
 
         val isPhone = LocalConfiguration.current.screenWidthDp < 600
@@ -906,15 +1176,11 @@ fun FastFoodPosScreen(
         Dialog(
             onDismissRequest = { showKitchen = false },
             properties = DialogProperties(usePlatformDefaultWidth = false)
-        ) {
+        )
+        {
             Surface(
-                modifier = Modifier
-                    .then(
-                        if (isPhone)
-                            Modifier.fillMaxWidth(1f) // 📱 full width on phone
-                        else
-                            Modifier.fillMaxWidth(1f) // 💻 slightly narrower on tablet
-                    )
+                modifier = Modifier.fillMaxWidth(1f) // 📱 full width on phone
+
                     .padding(8.dp),
                 shape = MaterialTheme.shapes.medium,
                 tonalElevation = 8.dp
@@ -957,16 +1223,40 @@ fun FastFoodPosScreen(
                             .heightIn(min = 300.dp, max = 600.dp)
                             .padding(top = 4.dp)
                     ) {
-                        KitchenScreen(
-                            sessionId = sessionId!!,
-                            tableNo = tableId ?: orderType,
-                            tableName = selectedTableName ?: "",
-                            kitchenViewModel = kitchenViewModel,
-                            cartViewModel = cartViewModel,
-                            onKitchenEmpty = { showKitchen = false },
-                            outletInfo = outletInfo,
-                            orderType = orderType
-                        )
+
+
+
+                        if (isPhone) {
+
+                            KitchenScreenPhone(
+                                sessionId = sessionId!!,
+                                tableNo = tableId.ifBlank { orderType },
+                                tableName = tableName  ?: orderType,
+                                kitchenViewModel = kitchenViewModel,
+                                cartViewModel = cartViewModel,
+                                onKitchenEmpty = {
+                                    showKitchen = false
+                                },
+                                outletInfo = outletInfo,
+                                orderType = orderType
+                            )
+
+                        } else {
+
+                            KitchenScreen(
+                                sessionId = sessionId!!,
+                                tableNo = tableId ?: orderType,
+                                tableName = tableName ?: "",
+                                kitchenViewModel = kitchenViewModel,
+                                cartViewModel = cartViewModel,
+                                onKitchenEmpty = { showKitchen = false },
+                                outletInfo = outletInfo,
+                                orderType = orderType
+                            )
+                        }
+
+
+
                     }
                 }
             }
@@ -978,21 +1268,21 @@ fun FastFoodPosScreen(
 
 
 // ================= BILL POPUP =================
-  //  val billingKey by cartViewModel.sessionKey.collectAsState()
+    //  val billingKey by cartViewModel.sessionKey.collectAsState()
 
     if (LocalConfiguration.current.screenWidthDp > 600)
         BillDialog(
-        showBill = showBill,
-        onDismiss = { showBill = false },
-        sessionId = sessionId,
-        tableId = tableId,
-        orderType = orderType,
-        currencyCode = outletInfo.currencyCode,
-        localeTag = outletInfo.localeTag,
-        selectedTableName = selectedTableName ?: "",
+            showBill = showBill,
+            onDismiss = { showBill = false },
+            sessionId = sessionId,
+            tableId = tableId,
+            orderType = orderType,
+            currencyCode = outletInfo.currencyCode,
+            localeTag = outletInfo.localeTag,
+            selectedTableName = selectedTableName ?: "",
             posSessionViewModel = posSessionViewModel,
-    )
-else{
+        )
+    else{
         BillDialogPhone(
             showBill = showBill,
             onDismiss = { showBill = false },
@@ -1011,7 +1301,7 @@ else{
 
 
 @Composable
-fun FastFoodOrderChip(
+fun OrderChip1(
     label: String,
     selected: Boolean,
     onClick: () -> Unit,
@@ -1052,7 +1342,7 @@ fun FastFoodOrderChip(
 
 
 
-fun FastFoodtoTitleCase(text: String): String {
+fun toTitleCase1(text: String): String {
     return text
         .lowercase()
         .split(" ")
