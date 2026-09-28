@@ -1300,7 +1300,7 @@ class BillViewModel(
     ) {
 
         val creditPaiseInput = _creditPaise.value
-        val paidModes = setOf("CASH", "CARD", "UPI", "WALLET")
+        val paidModes = setOf("CASH", "CARD", "UPI", "WALLET", "CANCEL")
 
         val hasPaid = payments.any { it.mode in paidModes }
         val hasUnpaid = payments.any { it.mode in unpaidModes }
@@ -1333,7 +1333,6 @@ class BillViewModel(
                     sendEvent("No items to bill")
                     return@launch
                 }
-
 
             val now = System.currentTimeMillis()
                 val orderDate = SimpleDateFormat(
@@ -1885,11 +1884,550 @@ class BillViewModel(
         }
     }
 
+
+
+    fun cancelBill(
+        payments: List<PaymentInput>,
+        name: String,
+        phone: String,
+        cancellationReason: String,
+    ) {
+
+
+
+
+        viewModelScope.launch {
+
+            if (!paymentMutex.tryLock()) {
+                sendEvent("Payment already in progress")
+                return@launch
+            }
+            _isProcessing.value = true
+
+            val outlet = outletDao.getOutlet()
+            if (outlet == null) {
+
+                _toastEvent.emit("Outlet not configured")
+                _isProcessing.value = false
+                return@launch
+            }
+
+
+            lateinit var fiscalService: FiscalService
+            lateinit var fiscalContext: FiscalContext
+
+            try {
+                val inputPhone = phone.trim()
+                val inputName = name.trim().ifBlank { "Customer" }
+                val kotItems = kotItemDao.getDoneItemsForTableOnce(tableId)
+                if (kotItems.isEmpty()) {
+                    sendEvent("No items to cancel")
+                    return@launch
+                }
+
+                val now = System.currentTimeMillis()
+                val orderDate = SimpleDateFormat(
+                    "yyyy-MM-dd",
+                    Locale.getDefault()
+                ).format(Date(now))
+                val currentBusinessDay =
+                    businessDayRepository.getCurrentBusinessDay()
+
+                val businessDate = currentBusinessDay.businessDate
+                val orderId = pendingOrderId ?: UUID.randomUUID().toString()
+                pendingOrderId = orderId
+
+                val mapping = orderSequenceRepository.getOrCreateOrderNo(
+                    mapKey = orderId,
+                    deviceCode = "P1",
+                    financialYear = getFinancialYearCode()
+                )
+
+                val srNo = mapping.srno
+                //================================
+                // BILL CALCULATION
+                //==================================
+                val calculation = BillCalculator.calculate(
+                    items = kotItems,
+                    taxMode = outlet.taxMode,
+                    discountFlat = _discountFlat.value,
+                    discountPercent = _discountPercent.value,
+                    deliveryFee = _deliveryFee.value,
+                    deliveryTaxPercent = _deliveryTaxPercent.value
+                )
+
+                val itemSubtotalPaise = calculation.itemSubtotalPaise
+
+                val validationKotItems = kotItemDao
+                    .getDoneItemsForTableOnce(tableId)
+
+
+                val validationItemSubtotalPaise = validationKotItems.sumOf { item ->
+
+                    val modifierPrice =
+                        ModifierJsonHelper.fromJson(item.modifiersJson)
+                            .flatMap { group -> group.items }
+                            .sumOf { modifier -> modifier.price }
+
+                    val basePlusModifier =
+                        item.basePrice + modifierPrice
+
+                    MoneyUtils.toPaise(basePlusModifier) * item.quantity
+                }
+
+                val firstTotalQuantity = kotItems.sumOf { it.quantity }
+                val validationTotalQuantity = validationKotItems.sumOf { it.quantity }
+
+                if (
+                    itemSubtotalPaise != validationItemSubtotalPaise ||
+                    firstTotalQuantity != validationTotalQuantity
+                ) {
+                    withContext(Dispatchers.Main) {
+                        sendEvent("Something went wrong. Please try again.")
+                    }
+                    return@launch
+                }
+
+                val safeDiscountPaise = calculation.discountPaise
+                val exclusiveTaxPaise = calculation.exclusiveTaxPaise
+                val inclusiveTaxPaise = calculation.inclusiveTaxPaise
+// Total GST on items (used for saving/reporting)
+                val itemTaxPaise = exclusiveTaxPaise + inclusiveTaxPaise
+                val deliveryFeePaise = calculation.deliveryFeePaise
+                val deliveryTaxPaise = calculation.deliveryTaxPaise
+                val totalTaxPaise = calculation.totalTaxPaise
+                val taxableAmountPaise = calculation.taxableAmountPaise
+                val roundOffPaise = calculation.roundOffPaise
+                val grandTotalPaise = calculation.grandTotalPaise
+
+                // ===========================
+                // PAYMENT CALCULATION
+                // ===========================
+                // ===========================
+// PAYMENT CALCULATION
+// ===========================
+
+
+// 👇 FIRST define paymentStatus
+
+
+
+
+
+
+
+
+
+// ===========================
+// ENSURE CUSTOMER EXISTS (IF PHONE ENTERED)
+// ===========================
+
+                var resolvedCustomerId: String? = null
+
+                if (inputPhone.isNotBlank()) {
+
+                    resolvedCustomerId = inputPhone
+
+                    val existingCustomer = customerDao.getCustomerByPhone(inputPhone)
+
+                    if (existingCustomer == null) {
+
+                        val customer = PosCustomerEntity(
+                            id = inputPhone,
+                            ownerId = outlet.ownerId,
+                            outletId = outlet.outletId,
+                            name = inputName,
+                            phone = inputPhone,
+                            addressLine1 = null,
+                            addressLine2 = null,
+                            city = null,
+                            state = null,
+                            zipcode = null,
+                            landmark = null,
+                            creditLimit = 0.0,
+                            currentDue = 0.0,   // 🔥 important
+                            createdAt = now,
+                            updatedAt = null
+                        )
+
+                        customerDao.insert(customer)
+                    }
+                }
+                // ===========================
+                // CUSTOMER CREDIT HANDLING
+                // ===========================
+
+
+
+                val paymentMode = "NON"
+//                    if (payments.size > 1) "MIXED"
+//                    else payments.firstOrNull()?.mode ?: "CREDIT"
+
+                val finalizedById = PosSessionManager.getUserId(app) ?: ""
+                val finalizedByName = PosSessionManager.getFullName(app) ?: ""
+
+                val stewardName = kotItems
+                    .mapNotNull { it.createdByName }
+                    .firstOrNull { it.isNotBlank() } ?: "NONAME"
+
+                val stewardId = kotItems
+                    .mapNotNull { it.createdById }
+                    .firstOrNull { it.isNotBlank() } ?: ""
+                // ===========================
+                // ORDER MASTER
+                // ===========================
+                Log.d(
+                    "ORDER_DETAIL",
+                    "INSERT OREDER in billviewmodel orderType=${orderType}, TableName=${tableName} ,TableId=${tableId}"
+                )
+
+                val orderMaster = PosOrderMasterEntity(
+                    id = orderId,
+                    srno = srNo,
+                    orderType = orderType,
+                    tableNo = tableName,
+                    customerName = inputName,
+                    customerPhone = inputPhone,
+                    customerId = resolvedCustomerId,
+                    dAddressLine1 = deliveryAddress?.line1,
+                    dAddressLine2 = deliveryAddress?.line2,
+                    dCity = deliveryAddress?.city,
+                    dState = deliveryAddress?.state,
+                    dZipcode = deliveryAddress?.zipcode,
+                    dLandmark = deliveryAddress?.landmark,
+                    itemTotal = MoneyUtils.fromPaise(itemSubtotalPaise),
+                    deliveryFee = 0.0,//_deliveryFee.value,
+                    deliveryTax = 0.0,//MoneyUtils.fromPaise(deliveryTaxPaise),
+                    itemTax = 0.0,//MoneyUtils.fromPaise(itemTaxPaise),
+                    taxTotal = 0.0,//MoneyUtils.fromPaise(totalTaxPaise),
+                    discountTotal = 0.0,// MoneyUtils.fromPaise(safeDiscountPaise),
+                    grandTotal = 0.0,//MoneyUtils.fromPaise(grandTotalPaise),
+                    paymentMode = "CANCEL",
+                    paymentStatus = "CANCELLED",
+                    paidAmount = 0.0,
+                    dueAmount = 0.0,
+                    orderStatus = "CANCELLED",
+                    deviceId = "POS",
+                    deviceName = "POS",
+                    appVersion = "1.0",
+                    createdById =stewardId,
+                    createdByName=stewardName,
+                    finalizedById=finalizedById,
+                    finalizedByName=finalizedByName,
+                    orderDate=orderDate,
+                    businessDate = businessDate,
+                    createdAt = now,
+                    updatedAt = now,
+                    syncStatus =  "PENDING",
+                    lastSyncedAt = null,
+                    reason = cancellationReason,
+                    notes = "Bill Cancelled by $stewardName"
+                )
+                val orderItems = kotItems
+                    .groupBy {
+                        listOf(
+                            it.productId,
+                            it.basePrice,
+                            it.taxRate,
+                            it.note,
+                            it.modifiersJson
+                        )
+                    }
+                    .map { (_, group) ->
+
+                        val first = group.first()
+                        val quantity = group.sumOf { it.quantity }
+                        val modifierPricePerItem =
+                            ModifierJsonHelper.fromJson(first.modifiersJson)
+                                .flatMap { it.items }
+                                .sumOf { it.price }
+                        //   val itemGrossAmount =
+                        //       ((first.basePrice + modifierPricePerItem) * quantity).round(2)
+                        //     val basePlusModifier = first.basePrice + modifierPricePerItem
+                        val basePlusModifier = first.basePrice + modifierPricePerItem
+                        val itemGrossAmount = (basePlusModifier * quantity).round(2)
+                        val taxPerItemPlusModifier =
+                            if (first.taxType == "exclusive")
+                                (basePlusModifier * (first.taxRate / 100))
+                            else 0.0
+                        val finalPricePerItemPlusModifier =
+                            (basePlusModifier + taxPerItemPlusModifier).round(2)
+
+                        val finalPriceTotalItemPlusModifier =
+                            (finalPricePerItemPlusModifier * quantity).round(2)
+
+                        val taxTotalItemPlusModifier =
+                            (taxPerItemPlusModifier * quantity).round(2)
+
+                        val modifierTotal =
+                            (modifierPricePerItem * quantity).round(2)
+                        Log.d("BASE_PRICE", "${first.basePrice}")
+
+                        PosOrderItemEntity(
+                            id = UUID.randomUUID().toString(),
+                            // 🔹 SNAPSHOT CATEGORY NAME (enterprise safe)
+                            categoryName = first.categoryName,
+                            orderMasterId = orderId,
+                            productId = first.productId,
+                            name = first.name,
+                            productMode = first.productMode,
+                            currentStock = first.currentStock,
+                            categoryId = first.categoryId,
+                            createdById =first.createdById,
+                            createdByName=first.createdByName,
+                            parentId = first.parentId,
+                            isVariant = first.isVariant,
+                            basePrice = first.basePrice,
+                            modifierPrice = modifierTotal,
+                            quantity = quantity,
+                            itemSubtotal = itemGrossAmount ,
+                            // 🔹 Currency snapshot (important for audit)
+                            currency = _currencySymbol.value,
+                            // 🔹 Payment snapshot (do NOT rely on join later)
+                            paymentStatus = "CANCEL",
+                            taxRate = first.taxRate,
+                            taxType = first.taxType,
+                            taxAmountPerItem = taxPerItemPlusModifier,
+                            taxTotal = taxTotalItemPlusModifier,
+                            note = first.note,
+                            modifiersJson = first.modifiersJson,
+                            finalPricePerItem = finalPricePerItemPlusModifier,
+                            finalTotal = finalPriceTotalItemPlusModifier,
+                            createdAt = now
+                        )
+                    }
+
+                // =====================================================
+// ORDER ITEM SUBTOTAL VALIDATION
+// =====================================================
+
+                val kotSubtotalPaise = kotItems.sumOf { item ->
+                    MoneyUtils.toPaise(item.basePrice) * item.quantity
+                }
+
+                val orderItemsSubtotalPaise = orderItems.sumOf { item ->
+                    MoneyUtils.toPaise(item.itemSubtotal)
+                }
+
+
+                // val (txId, clientId) = fiskalyRepository.startTransaction()
+                //fiscalService = getFiscalService(outlet.countryName!!, fiskalyRepository)
+                fiscalService = getFiscalService("IN", fiskalyRepository)
+
+                withContext(Dispatchers.IO) {
+
+                    db.withTransaction {
+
+                        // ==========================================
+                        // 1. READ CURRENT DONE KOT ITEMS
+                        // ==========================================
+
+                        val currentKotItems = kotItemDao
+                            .getDoneItemsForTableOnce(tableId)
+
+
+                        if (currentKotItems.isEmpty()) {
+                            throw IllegalStateException("No items to bill")
+                        }
+
+                        // ==========================================
+                        // 2. VALIDATE CURRENT KOT DATA
+                        // ==========================================
+
+                        val currentItemSubtotalPaise =
+                            currentKotItems.sumOf { item ->
+
+                                val modifierPrice =
+                                    ModifierJsonHelper.fromJson(item.modifiersJson)
+                                        .flatMap { group -> group.items }
+                                        .sumOf { modifier -> modifier.price }
+
+                                val basePlusModifier =
+                                    item.basePrice + modifierPrice
+
+                                MoneyUtils.toPaise(basePlusModifier) * item.quantity
+                            }
+
+                        val currentTotalQuantity =
+                            currentKotItems.sumOf {
+                                it.quantity
+                            }
+
+                        if (
+                            currentItemSubtotalPaise != itemSubtotalPaise ||
+                            currentTotalQuantity != firstTotalQuantity
+                        ) {
+                            throw IllegalStateException("Bill data changed")
+                        }
+
+                        // ==========================================
+                        // 3. SAVE ORDER MASTER
+                        // ==========================================
+
+                        orderMasterDao.insert(orderMaster)
+
+                        // ==========================================
+                        // 4. VERIFY SAVED ORDER MASTER
+                        // ==========================================
+
+                        val savedOrder =
+                            orderMasterDao.getByIdSync(orderId)
+
+                        if (
+                            savedOrder == null ||
+                            MoneyUtils.toPaise(savedOrder.itemTotal) !=
+                            itemSubtotalPaise
+                        ) {
+                            throw IllegalStateException("Order validation failed")
+                        }
+
+                        // ==========================================
+                        // 5. SAVE ORDER ITEMS
+                        // ==========================================
+
+                        orderProductDao.insertAll(orderItems)
+
+                        // ==========================================
+                        // 6. SAVE PAYMENTS
+                        // ==========================================
+
+//                        if (payments.isNotEmpty() && totalPaidPaise > 0) {
+//
+//                            val paymentEntities = payments.map {
+//                                PosOrderPaymentEntity(
+//                                    id = UUID.randomUUID().toString(),
+//                                    orderId = orderId,
+//                                    ownerId = outlet.ownerId,
+//                                    outletId = outlet.outletId,
+//                                    amount = MoneyUtils.fromPaise(it.amount),
+//                                    mode = it.mode,
+//                                    provider = null,
+//                                    method = null,
+//                                    status = "SUCCESS",
+//                                    deviceId = "POS",
+//                                    createdAt = now,
+//                                    businessDate = businessDate,
+//                                    syncStatus = "PENDING"
+//                                )
+//                            }
+//
+//                            paymentRepository.insertPayments(
+//                                paymentEntities
+//                            )
+//                        }
+
+                        // ==========================================
+                        // 7. UPDATE KOT HISTORY
+                        // ==========================================
+
+                        kotRepository.markHistoryPaid(
+                            tableNo = tableId,
+                            orderId = orderId
+                        )
+
+                        // ==========================================
+                        // 8. FINALIZE TABLE
+                        // ==========================================
+
+                        repository.finalizeTableAfterPayment(
+                            tableNo = tableId,
+                            orderType = orderType
+                        )
+
+                        // ==========================================
+                        // 9. DELETE LOCAL KOT
+                        // ==========================================
+
+                        kotRepository.deleteKotByTable(
+                            tableId
+                        )
+
+                        // ==========================================
+                        // 10. CLEAR ORDER SEQUENCE
+                        // ==========================================
+
+                        orderSequenceRepository.clearOrder(
+                            orderId
+                        )
+                    } // END TRANSACTION
+
+                    // ==============================================
+                    // ROOM TRANSACTION SUCCESSFULLY COMMITTED
+                    // ==============================================
+
+                    if (
+                        orderType == "TAKEAWAY" ||
+                        orderType == "DELIVERY"
+                    ) {
+
+                        val nextVirtualTable =
+                            virtualTableRepository.markCompleted(
+                                tableId = tableId,
+                                tableName = tableName,
+                                orderType = orderType
+                            )
+
+                        if (nextVirtualTable != null) {
+
+                            posSessionViewModel.setNextVirtualTable(
+                                tableId = nextVirtualTable.id,
+                                tableName = nextVirtualTable.tableName,
+                                orderType = nextVirtualTable.orderType
+                            )
+                        }
+                    }
+
+                    // ==============================================
+                    // FIRESTORE
+                    // ==============================================
+
+                    tableKotSyncService.clearTableSnapshot(
+                        tableId,
+                        source = "PAYMENT_CLEAR"
+                    )
+
+                    SyncManagerProvider.get()
+                        .addClearTable(tableId)
+                }
+
+
+                //FISKLAY CODE
+
+
+                sendEvent("Bill cancelled")
+                pendingOrderId = null
+                resetBillUi()
+            } catch (e: Exception) {
+
+//                if (::fiscalService.isInitialized && ::fiscalContext.isInitialized) {
+//                    withContext(Dispatchers.IO) {
+//                        fiscalService.cancel(fiscalContext)
+//                    }
+//                }
+
+                // if (!isFinished) {
+                fiscalService.cancel(fiscalContext)
+                // }
+
+                Log.e("CANCEL_ERROR", "Cancel failed", e)
+                sendEvent("Cancel failed")
+            }finally {
+                _isProcessing.value = false
+                if (paymentMutex.isLocked) {
+                    paymentMutex.unlock()
+                }
+            }
+
+        }
+    }
     fun Double.round(decimals: Int): Double {
         val factor = 10.0.pow(decimals)
         return kotlin.math.round(this * factor) / factor
     }
-    fun deleteItem(itemId: String) {
+    fun deleteItem(
+                   itemId: String,
+                   reason: String
+                   ) {
         viewModelScope.launch {
             try {
                 //Mark Deleted

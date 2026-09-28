@@ -120,6 +120,10 @@ fun NavigationHost(
         mutableStateOf<OutletEntity?>(null)
     }
 
+    var outletLoaded by remember {
+        mutableStateOf(false)
+    }
+
     var currencyCode by remember {
         mutableStateOf("INR")
     }
@@ -129,16 +133,17 @@ fun NavigationHost(
     }
 
     LaunchedEffect(Unit) {
+        val loadedOutlet = outletDao.getOutlet()
 
-        val outlet = outletDao.getOutlet()
+        outlet = loadedOutlet
 
-        currencyCode = outlet?.currencyCode ?: "INR"
-        localeTag = outlet?.localeTag ?: "en-IN"
+        currencyCode = loadedOutlet?.currencyCode ?: "INR"
+        localeTag = loadedOutlet?.localeTag ?: "en-IN"
+
+        outletLoaded = true
     }
 
-    LaunchedEffect(Unit) {
-        outlet = outletDao.getOutlet()
-    }
+    val startupScreen = outlet?.startupScreen ?: "pos"
     // -----------------------------
     // SHARED VIEWMODELS
     // -----------------------------
@@ -234,18 +239,11 @@ fun NavigationHost(
     val role = PosRoleManager.getRole(context)
 
 
-
-
-    var startupScreen by remember {
-        mutableStateOf("tables")
+    if (!outletLoaded) {
+        return
     }
 
-    LaunchedEffect(Unit) {
 
-        val outlet = outletDao.getOutlet()
-
-        startupScreen = outlet?.startupScreen ?: "tables"
-    }
 
    // val posType = outlet?.posType ?: "RESTAU"
     val posType = try {

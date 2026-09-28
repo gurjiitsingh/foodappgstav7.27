@@ -68,7 +68,12 @@ fun BillDialog(
     // NEW PRINT WINDOW
     var isBillPrinted by remember { mutableStateOf(false) }
     var isPrinted by remember { mutableStateOf(false) }
+    var showCancelReasonDialog by remember { mutableStateOf(false) }
+    var cancellationReason by remember { mutableStateOf("") }
 
+    var showItemDeleteReasonDialog by remember { mutableStateOf(false) }
+    var itemDeleteReason by remember { mutableStateOf("") }
+    var pendingDeleteItemId by remember { mutableStateOf<String?>(null) }
 
 //    Log.d(
 //        "VIRTUAL_TABLE_STATUS",
@@ -214,6 +219,15 @@ fun BillDialog(
                             },
                             currencyCode = currencyCode,
                             localeTag = localeTag,
+                            onLastItemDelete = {
+                                cancellationReason = ""
+                                showCancelReasonDialog = true
+                            },
+                            onItemDelete = { itemId ->
+                                pendingDeleteItemId = itemId
+                                itemDeleteReason = ""
+                                showItemDeleteReasonDialog = true
+                            }
                         )
                     //}
                 }
@@ -245,7 +259,8 @@ fun BillDialog(
                             .padding(bottom = 2.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
-                    ) {
+                    )
+                    {
 //                        Text(
 //                            "Actions",
 //                            style = MaterialTheme.typography.titleSmall,
@@ -627,21 +642,37 @@ fun BillDialog(
 
 
 
-                    val showPrintButton = !isPrinted
+                    val showPrintButton = !isPrinted;
 
-                    if (showPrintButton) {
+                              if (showPrintButton) {
 
-                        PrintButton(
-                            onPrint = {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                PrintButton(
+                                    modifier = Modifier.weight(1f),
+                                    onPrint = {
+                                        billViewModel.printCurrentBill()
+                                        isPrinted = true
+                                    }
+                                )
 
-                                billViewModel.printCurrentBill()
-
-                                // ✅ THIS WILL NOW TRIGGER RECOMPOSITION
-                                isPrinted = true
+                                CancelButton(
+                                    modifier = Modifier.weight(1f),
+                                    text = "Cancel Bill",
+                                    color = Color(0xFF2E7D32),
+                                    onClick = {
+                                        cancellationReason = ""
+                                        showCancelReasonDialog = true
+                                    }
+                                )
                             }
-                        )
+                        }
 
-                    } else {
+                    else {
                         PaymentButtonsSection(
                             remainingPaise = remainingPaise,
 
@@ -725,7 +756,7 @@ fun BillDialog(
                                             modifier = Modifier.weight(1f)
                                         )
 
-                                        // ❌ Cancel
+
                                         IconButton(onClick = {
                                             creditAmount.value = ""
                                             activeInput = null
@@ -773,6 +804,132 @@ fun BillDialog(
                         )
 
                 }
+
+                        if (showCancelReasonDialog) {
+                            AlertDialog(
+                                onDismissRequest = {
+                                    showCancelReasonDialog = false
+                                },
+                                title = {
+                                    Text("Cancel Bill")
+                                },
+                                text = {
+                                    OutlinedTextField(
+                                        value = cancellationReason,
+                                        onValueChange = {
+                                            cancellationReason = it
+                                        },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        label = {
+                                            Text("Reason")
+                                        },
+                                        placeholder = {
+                                            Text("Enter cancellation reason")
+                                        },
+                                        singleLine = false,
+                                        minLines = 3,
+                                        maxLines = 5
+                                    )
+                                },
+                                confirmButton = {
+                                    TextButton(
+                                        onClick = {
+                                            val reason = cancellationReason.trim()
+
+                                            if (reason.isBlank()) {
+                                                return@TextButton
+                                            }
+
+                                            val finalPayments = listOf(
+                                                PaymentInput(
+                                                    mode = "CANCEL",
+                                                    amount = remainingPaise
+                                                )
+                                            )
+
+                                            showCancelReasonDialog = false
+
+                                            billViewModel.cancelBill(
+                                                payments = finalPayments,
+                                                name = "Customer",
+                                                phone = uiState.value.customerPhone,
+                                                cancellationReason = reason
+                                            )
+                                        }
+                                    ) {
+                                        Text("Cancel Bill")
+                                    }
+                                },
+                                dismissButton = {
+                                    TextButton(
+                                        onClick = {
+                                            showCancelReasonDialog = false
+                                        }
+                                    ) {
+                                        Text("Close")
+                                    }
+                                }
+                            )
+                        }
+
+                        if (showItemDeleteReasonDialog) {
+                            AlertDialog(
+                                onDismissRequest = {
+                                    showItemDeleteReasonDialog = false
+                                },
+                                title = {
+                                    Text("Delete Item")
+                                },
+                                text = {
+                                    OutlinedTextField(
+                                        value = itemDeleteReason,
+                                        onValueChange = {
+                                            itemDeleteReason = it
+                                        },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        label = {
+                                            Text("Reason")
+                                        },
+                                        placeholder = {
+                                            Text("Enter reason for deleting item")
+                                        },
+                                        minLines = 3,
+                                        maxLines = 5
+                                    )
+                                },
+                                confirmButton = {
+                                    TextButton(
+                                        onClick = {
+                                            val reason = itemDeleteReason.trim()
+
+                                            if (reason.isBlank()) {
+                                                return@TextButton
+                                            }
+
+                                            pendingDeleteItemId?.let { itemId ->
+                                                billViewModel.deleteItem(itemId, reason = reason)
+                                            }
+
+                                            showItemDeleteReasonDialog = false
+                                            pendingDeleteItemId = null
+                                            itemDeleteReason = ""
+                                        }
+                                    ) {
+                                        Text("Delete Item")
+                                    }
+                                },
+                                dismissButton = {
+                                    TextButton(
+                                        onClick = {
+                                            showItemDeleteReasonDialog = false
+                                            pendingDeleteItemId = null
+                                        }
+                                    ) {
+                                        Text("Close")
+                                    }
+                                }
+                            )
+                        }
 
 // ===============================
 // GLOBAL NUMPAD (Single Keyboard)

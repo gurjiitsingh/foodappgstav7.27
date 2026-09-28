@@ -1,5 +1,6 @@
 package com.it10x.foodappgstav7_27.ui.orders.local
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.it10x.foodappgstav7_27.data.PrinterRole
@@ -60,20 +61,56 @@ class LocalOrderDetailViewModel(
         .map { it?.deliveryTax ?: 0.0 }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0.0)
 
-    val paymentStatus = combine(totalPaid, dueAmount) { paid, due ->
-        when {
-            paid == 0.0 -> "CREDIT"
-            due > 0.0 -> "PARTIAL"
-            else -> "PAID"
-        }
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), "CREDIT")
+//    val paymentStatus = combine(totalPaid, dueAmount) { paid, due ->
+//        when {
+//            paid == 0.0 -> "CREDIT"
+//            due > 0.0 -> "PARTIAL"
+//            else -> "PAID"
+//        }
+//    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), "CREDIT")
 
+    val paymentStatus = orderInfo
+        .map { order ->
+            Log.d(
+                "ORDER_DETAIL",
+                "orderId=$orderId | orderStatus=${order?.orderStatus} | " +
+                        "paymentMode=${order?.paymentMode} | " +
+                        "paymentStatus=${order?.paymentStatus} | " +
+                        "paidAmount=${order?.paidAmount} | " +
+                        "dueAmount=${order?.dueAmount}"
+            )
+
+            order?.paymentStatus ?: "CREDIT"
+        }
+        .stateIn(
+            viewModelScope,
+            SharingStarted.WhileSubscribed(5_000),
+            "CREDIT"
+        )
 
     init {
         viewModelScope.launch {
-            _orderInfo.value = repository.getOrderById(orderId)
+            val loadedOrder = repository.getOrderById(orderId)
+
+            Log.d(
+                "ORDER_DETAIL",
+                "LOADED ORDER: id=${loadedOrder?.id} | " +
+                        "srno=${loadedOrder?.srno} | " +
+                        "orderStatus=${loadedOrder?.orderStatus} | " +
+                        "paymentMode=${loadedOrder?.paymentMode} | " +
+                        "paymentStatus=${loadedOrder?.paymentStatus} | " +
+                        "paidAmount=${loadedOrder?.paidAmount} | " +
+                        "dueAmount=${loadedOrder?.dueAmount}"
+            )
+
+            _orderInfo.value = loadedOrder
         }
     }
+//    init {
+//        viewModelScope.launch {
+//            _orderInfo.value = repository.getOrderById(orderId)
+//        }
+//    }
 
     fun updateGrandTotal(newTotal: Double) {
         val current = _orderInfo.value ?: return

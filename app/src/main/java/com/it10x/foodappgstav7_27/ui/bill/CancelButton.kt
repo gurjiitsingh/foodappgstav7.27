@@ -12,22 +12,24 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 @Composable
-fun PrintButton(
-    onPrint: () -> Unit,
-    modifier: Modifier = Modifier
+fun CancelButton(
+    modifier: Modifier = Modifier,
+    text: String = "Cancel Bill",
+    color: Color = Color(0xFF2E7D32),
+    onClick: () -> Unit
 ) {
     Button(
-        onClick = onPrint,
+        onClick = onClick,
         modifier = modifier
             .fillMaxWidth()
             .height(52.dp),
         colors = ButtonDefaults.buttonColors(
-            containerColor = Color(0xFF2E7D32), // POS green
+            containerColor = color,
             contentColor = Color.White
         )
     ) {
         Text(
-            text = "🖨️ Print Bill",
+            text = text,
             fontSize = 16.sp
         )
     }

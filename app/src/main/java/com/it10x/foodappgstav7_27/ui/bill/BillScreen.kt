@@ -51,7 +51,10 @@ fun BillScreen(
     viewModel: BillViewModel,
     currencyCode: String,
     localeTag: String,
-    onPayClick: (PaymentType) -> Unit
+    onPayClick: (PaymentType) -> Unit,
+    onLastItemDelete: () -> Unit,
+    onItemDelete: (String) -> Unit
+
 ) {
     val state by viewModel.uiState.collectAsState()
     val currency by viewModel.currencySymbol.collectAsState()
@@ -129,7 +132,14 @@ fun BillScreen(
                         )
                         {
                             IconButton(
-                                onClick = { viewModel.deleteItem(item.id) },
+                                onClick = {
+                                    if (state.items.size == 1) {
+                                        onLastItemDelete()
+                                    } else {
+                                        onItemDelete(item.id)
+                                       // viewModel.deleteItem(item.id)
+                                    }
+                                },
                                 modifier = Modifier.size(28.dp)
                             ) {
                                 Icon(
@@ -138,6 +148,8 @@ fun BillScreen(
                                     tint = Color(0xFFD32F2F)
                                 )
                             }
+
+
 
                             Column {
 

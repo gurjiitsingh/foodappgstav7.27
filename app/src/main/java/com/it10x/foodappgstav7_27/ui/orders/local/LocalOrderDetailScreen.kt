@@ -473,10 +473,17 @@ fun OrderInfoCard(o: PosOrderMasterEntity) {
                     color = Color.White
                 )
 
+
                 Text(
                     "Status: ${o.orderStatus}",
                     color = Color.White
                 )
+                if (o.orderStatus == "CANCELLED" && !o.reason.isNullOrBlank()) {
+                    Text(
+                        "Cancel Reason: ${o.reason}",
+                        color = Color.White
+                    )
+                }
 
                 Text(
                     "Sync Status: ${o.syncStatus}",
