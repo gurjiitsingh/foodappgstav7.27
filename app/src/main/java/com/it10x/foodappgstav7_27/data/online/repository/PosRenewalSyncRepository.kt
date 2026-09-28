@@ -372,26 +372,47 @@ class PosRenewalSyncRepository(
 
             return valid
 
-        } catch (e: Exception) {
-
-            // =================================================
-            // INTERNET / FIRESTORE UNAVAILABLE
-            //
-            // NEVER BLOCK POS BECAUSE INTERNET IS OFF.
-            // =================================================
+        }
+        catch (e: Exception) {
 
             Log.e(
                 "POS_RENEWAL",
-                "Firestore renewal check failed - ignoring because internet may be unavailable",
+                "Firestore renewal check failed",
                 e
             )
 
+            // Local renewal is expired.
+            // Allow maximum 10 offline startup attempts.
+
+            val renewal = db.posRenewalDao().getRenewal()
+            val attempts = renewal?.offlineAttempts ?: 0
+
+            if (attempts < 10) {
+
+                val newAttempts = attempts + 1
+
+                db.posRenewalDao().save(
+                    PosRenewalEntity(
+                        updatedAt = renewal?.updatedAt
+                            ?: System.currentTimeMillis(),
+                        offlineAttempts = newAttempts
+                    )
+                )
+
+                Log.d(
+                    "POS_RENEWAL",
+                    "Offline startup allowed: $newAttempts / 10"
+                )
+
+                return true
+            }
+
             Log.d(
                 "POS_RENEWAL",
-                "Internet/Firestore unavailable - POS CAN START"
+                "Offline startup blocked: 10 / 10 attempts used"
             )
 
-            return true
+            return false
         }
     }
 

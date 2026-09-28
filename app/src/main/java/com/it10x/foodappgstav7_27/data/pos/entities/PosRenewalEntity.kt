@@ -10,5 +10,9 @@ data class PosRenewalEntity(
     val id: Int = 1,
 
     // Last successful Firestore renewal check
-    val updatedAt: Long = System.currentTimeMillis()
+    val updatedAt: Long = System.currentTimeMillis(),
+
+    // Number of POS startups allowed while renewal is expired
+    // and Firestore/internet is unavailable.
+    val offlineAttempts: Int = 0
 )

@@ -49,7 +49,7 @@ import androidx.room.Entity
         OrderSerialMapEntity::class,
         PosRenewalEntity::class,
     ],
-    version = 153,              // ⬆️ increment version since schema changed
+    version = 154,              // ⬆️ increment version since schema changed
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {

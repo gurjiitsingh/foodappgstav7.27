@@ -362,8 +362,6 @@ class MainActivity : ComponentActivity() {
                     mutableStateOf(FirstSyncManager.isFirstSyncDone(context))
                 }
 
-                //RENEW CODE
-
 
 // =====================================================
 // POS RENEWAL CHECK
