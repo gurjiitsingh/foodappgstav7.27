@@ -12,8 +12,8 @@ import androidx.room.PrimaryKey
         Index(value = ["parentId"]),
         Index(value = ["createdAt"]),
         Index(value = ["categoryName"]),
-        Index(value = ["paymentStatus"]),
-        Index(value = ["paymentStatus", "createdAt"])
+        Index(value = ["status"]),
+        Index(value = ["status", "createdAt"])
     ]
 )
 data class PosOrderItemEntity(
@@ -50,7 +50,7 @@ data class PosOrderItemEntity(
     val quantity: Int,
     val itemSubtotal: Double,        // basePrice * quantity
     val currency: String?,
-    val paymentStatus: String?,
+    val status: String = "DONE",        // DONE | DELETED
     // =====================================================
     // TAX SNAPSHOT (FINAL)
     // =====================================================

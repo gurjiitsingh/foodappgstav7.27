@@ -824,15 +824,15 @@ class BillViewModel(
                             // 🔹 Currency snapshot (important for audit)
                             currency = _currencySymbol.value,
                             // 🔹 Payment snapshot (do NOT rely on join later)
-                            paymentStatus = "FREE",
+                            status = "FREE",//first.status,
                             taxRate = first.taxRate,
                             taxType = first.taxType,
                             taxAmountPerItem = taxPerItemPlusModifier,
                             taxTotal = 0.0,
                             note = first.note,
                             modifiersJson = first.modifiersJson,
-                            finalPricePerItem = finalPricePerItemPlusModifier,
-                            finalTotal = finalPriceTotalItemPlusModifier,
+                            finalPricePerItem = 0.0,//finalPricePerItemPlusModifier,
+                            finalTotal = 0.0,//finalPriceTotalItemPlusModifier,
                             createdAt = now
                         )
                     }
@@ -843,29 +843,30 @@ class BillViewModel(
                     fiscalService.start()
                 }
                 withContext(Dispatchers.IO) {
-                 //   orderMasterDao.insert(orderMaster)
-                  //  orderProductDao.insertAll(orderItems)
+                    orderMasterDao.insert(orderMaster)
+                    orderProductDao.insertAll(orderItems)
 
-                    // if (payments.isNotEmpty() && totalPaidPaise > 0){
-                    //     val paymentEntities = payments.map {
-                    //         PosOrderPaymentEntity(
-                    //             id = UUID.randomUUID().toString(),
-                    //             orderId = orderId,
-                    //             ownerId = outlet.ownerId,
-                    //             outletId = outlet.outletId,
-                    //             amount = MoneyUtils.fromPaise(it.amount),
-                    //             mode = it.mode,
-                    //             provider = null,
-                    //             method = null,
-                    //             status = "SUCCESS",
-                    //             deviceId = "POS",
-                    //             createdAt = now,
-                    //             syncStatus = "PENDING"
-                    //         )
-                    //     }
-
-                    //     paymentRepository.insertPayments(paymentEntities)
-                    // }
+//                     if (payments.isNotEmpty() && totalPaidPaise > 0){
+//                         val paymentEntities = payments.map {
+//                             PosOrderPaymentEntity(
+//                                 id = UUID.randomUUID().toString(),
+//                                 orderId = orderId,
+//                                 ownerId = outlet.ownerId,
+//                                 outletId = outlet.outletId,
+//                                 amount = MoneyUtils.fromPaise(it.amount),
+//                                 mode = it.mode,
+//                                 provider = null,
+//                                 method = null,
+//                                 status = "SUCCESS",
+//                                 deviceId = "POS",
+//                                 createdAt = now,
+//                                 businessDate = now,
+//                                 syncStatus = "PENDING"
+//                             )
+//                         }
+//
+//                         paymentRepository.insertPayments(paymentEntities)
+//                     }
 
                     // UPDATE KOT STATUS PAID
 //                     kotRepository.markHistoryPaid(
@@ -1246,7 +1247,7 @@ class BillViewModel(
                             itemSubtotal = itemGrossAmount,
 
                             currency = _currencySymbol.value,
-                            paymentStatus = "UNPAID",
+                            status = first.status,
 
                             taxRate = first.taxRate,
                             taxType = first.taxType,
@@ -1329,10 +1330,13 @@ class BillViewModel(
             val inputPhone = phone.trim()
             val inputName = name.trim().ifBlank { "Customer" }
             val kotItems = kotItemDao.getDoneItemsForTableOnce(tableId)
+                val orderDetailItems =
+                    kotItemDao.getDoneAndDeletedItemsForOrderDetail(tableId)
             if (kotItems.isEmpty()) {
                     sendEvent("No items to bill")
                     return@launch
                 }
+
 
             val now = System.currentTimeMillis()
                 val orderDate = SimpleDateFormat(
@@ -1578,7 +1582,10 @@ class BillViewModel(
                 lastSyncedAt = null,
                 notes = null
             )
-                val orderItems = kotItems
+
+
+             //   val orderItems = kotItems
+                val orderItems = orderDetailItems
                     .groupBy {
                         listOf(
                             it.productId,
@@ -1590,15 +1597,16 @@ class BillViewModel(
                     }
                     .map { (_, group) ->
 
+
                         val first = group.first()
                         val quantity = group.sumOf { it.quantity }
                         val modifierPricePerItem =
                             ModifierJsonHelper.fromJson(first.modifiersJson)
                                 .flatMap { it.items }
                                 .sumOf { it.price }
-                     //   val itemGrossAmount =
-                     //       ((first.basePrice + modifierPricePerItem) * quantity).round(2)
-                   //     val basePlusModifier = first.basePrice + modifierPricePerItem
+
+
+
                         val basePlusModifier = first.basePrice + modifierPricePerItem
                         val itemGrossAmount = (basePlusModifier * quantity).round(2)
                         val taxPerItemPlusModifier =
@@ -1616,7 +1624,54 @@ class BillViewModel(
 
                         val modifierTotal =
                             (modifierPricePerItem * quantity).round(2)
-                        Log.d("BASE_PRICE", "${first.basePrice}")
+
+//                        val isDeleted = first.status == "DELETED"
+//
+//                        val basePlusModifier = first.basePrice + modifierPricePerItem
+//
+//                        val itemGrossAmount =
+//                            if (isDeleted) {
+//                                0.0
+//                            } else {
+//                                (basePlusModifier * quantity).round(2)
+//                            }
+//
+//                        val taxPerItemPlusModifier =
+//                            if (isDeleted) {
+//                                0.0
+//                            } else if (first.taxType == "exclusive") {
+//                                (basePlusModifier * (first.taxRate / 100))
+//                            } else {
+//                                0.0
+//                            }
+//
+//                        val finalPricePerItemPlusModifier =
+//                            if (isDeleted) {
+//                                0.0
+//                            } else {
+//                                (basePlusModifier + taxPerItemPlusModifier).round(2)
+//                            }
+//
+//                        val finalPriceTotalItemPlusModifier =
+//                            if (isDeleted) {
+//                                0.0
+//                            } else {
+//                                (finalPricePerItemPlusModifier * quantity).round(2)
+//                            }
+//
+//                        val taxTotalItemPlusModifier =
+//                            if (isDeleted) {
+//                                0.0
+//                            } else {
+//                                (taxPerItemPlusModifier * quantity).round(2)
+//                            }
+//
+//                        val modifierTotal =
+//                            if (isDeleted) {
+//                                0.0
+//                            } else {
+//                                (modifierPricePerItem * quantity).round(2)
+//                            }
 
                          PosOrderItemEntity(
                             id = UUID.randomUUID().toString(),
@@ -1639,7 +1694,7 @@ class BillViewModel(
                             // 🔹 Currency snapshot (important for audit)
                             currency = _currencySymbol.value,
                             // 🔹 Payment snapshot (do NOT rely on join later)
-                            paymentStatus = paymentStatus,
+                            status = first.status,
                             taxRate = first.taxRate,
                             taxType = first.taxType,
                             taxAmountPerItem = taxPerItemPlusModifier,
@@ -2184,7 +2239,7 @@ class BillViewModel(
                             // 🔹 Currency snapshot (important for audit)
                             currency = _currencySymbol.value,
                             // 🔹 Payment snapshot (do NOT rely on join later)
-                            paymentStatus = "CANCEL",
+                            status = "DELETED",
                             taxRate = first.taxRate,
                             taxType = first.taxType,
                             taxAmountPerItem = taxPerItemPlusModifier,
@@ -2431,9 +2486,23 @@ class BillViewModel(
         viewModelScope.launch {
             try {
                 //Mark Deleted
-                kotRepository.markHistoryDeleted(itemId)
+                kotRepository.markHistoryDeleted(
+                    itemId = itemId,
+                    reason = reason
+                )
                 // 1️⃣ Delete from KOT
-                kotItemDao.deleteItemById(itemId)
+                // kotItemDao.deleteItemById(itemId)
+
+                val originalItem = kotItemDao.getItemById(itemId)
+                val deletionNote = buildString {
+                    append(reason)
+                    append(" | Original Price: ")
+                    append(originalItem?.basePrice ?: 0.0)
+                }
+                kotItemDao.markItemDeleted(
+                    itemId = itemId,
+                    reason = deletionNote
+                )
 
                 // 2️⃣ Update real table bill counters
                 kotRepository.syncBillCount(tableId)

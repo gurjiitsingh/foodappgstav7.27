@@ -53,7 +53,7 @@ interface OrderProductDao {
         SUM(quantity) AS totalQty,
         SUM(finalTotal) AS total
     FROM pos_order_items
-    WHERE paymentStatus = 'PAID'
+    WHERE status = 'DONE'
       AND createdAt BETWEEN :from AND :to
     GROUP BY categoryName
     ORDER BY total DESC
@@ -73,7 +73,7 @@ interface OrderProductDao {
         SUM(quantity) AS totalQty,
         SUM(finalTotal) AS total
     FROM pos_order_items
-    WHERE paymentStatus = 'PAID'
+    WHERE status = 'DONE'
       AND createdAt BETWEEN :from AND :to
     GROUP BY categoryName, name
     ORDER BY categoryName ASC, total DESC
@@ -111,7 +111,7 @@ GROUP BY categoryId
     @Query("""
     SELECT *
     FROM pos_order_items
-    WHERE paymentStatus = 'PAID'
+    WHERE status = 'DONE'
 """)
     suspend fun getPaidItems(): List<PosOrderItemEntity>
 

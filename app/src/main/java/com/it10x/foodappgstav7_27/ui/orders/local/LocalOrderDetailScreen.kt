@@ -138,7 +138,31 @@ fun OrderProductRow(item: PosOrderItemEntity, currencyCode: String, localeTag: S
             verticalAlignment = Alignment.Top
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Text(text = item.name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+//                Text(text = item.name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                Text(
+                    text = item.name,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium
+                )
+
+                if (item.status == "DELETED") {
+                    Text(
+                        text = "DELETED",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color(0xFFD32F2F),
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    if (item.note.isNotBlank()) {
+                        Text(
+                            text = "Reason: ${item.note}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color(0xFFD32F2F)
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(2.dp))
                 Spacer(Modifier.height(2.dp))
 
                 val finalPriceAndModifier = item.finalPricePerItem;
@@ -473,7 +497,13 @@ fun OrderInfoCard(o: PosOrderMasterEntity) {
                     color = Color.White
                 )
 
-
+                if (o.saleType == "COMPLIMENTARY") {
+                    Text(
+                        "Order Type: COMPLIMENTARY",
+                        color = Color(0xFFFF9800),
+                        fontWeight = FontWeight.Bold
+                    )
+                }
                 Text(
                     "Status: ${o.orderStatus}",
                     color = Color.White

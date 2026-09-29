@@ -906,7 +906,7 @@ fun BillDialog(
                                                 return@TextButton
                                             }
 
-                                            pendingDeleteItemId?.let { itemId ->
+                                            pendingDeleteItemId?.let { itemId,  ->
                                                 billViewModel.deleteItem(itemId, reason = reason)
                                             }
 

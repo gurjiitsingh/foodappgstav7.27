@@ -69,6 +69,15 @@ LIMIT 1
     suspend fun getDoneItemsForTableOnce(
         tableNo: String
     ): List<PosKotItemEntity>
+
+    @Query("""
+    SELECT * FROM pos_kot_items
+    WHERE tableNo = :tableNo
+      AND status IN ('DONE', 'DELETED')
+""")
+    suspend fun getDoneAndDeletedItemsForOrderDetail(
+        tableNo: String
+    ): List<PosKotItemEntity>
     // -------------------------
     // CLEANUP AFTER PAYMENT
     // -------------------------
@@ -148,7 +157,27 @@ AND status = 'PENDING'
     suspend fun deleteItemById(id: String)
 
 
+    @Query("""
+    UPDATE pos_kot_items
+    SET status = 'DELETED',
+        note = :reason,
+        finalPrice = 0.0,
+        basePrice = 0.0
+    WHERE id = :itemId
+""")
+    suspend fun markItemDeleted(
+        itemId: String,
+        reason: String
+    )
 
+    @Query("""
+    SELECT * FROM pos_kot_items
+    WHERE id = :itemId
+    LIMIT 1
+""")
+    suspend fun getItemById(
+        itemId: String
+    ): PosKotItemEntity?
 
     // ✅ Get quantity for a specific table + product (unique key)
     @Query("SELECT quantity FROM pos_kot_items WHERE id = :id LIMIT 1")

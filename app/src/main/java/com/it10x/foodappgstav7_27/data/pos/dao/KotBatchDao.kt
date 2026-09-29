@@ -232,8 +232,23 @@ LIMIT 200
             deletedAt = :deletedAt
         WHERE id = :itemId
     """)
+    suspend fun markItemDeleted_old(
+        itemId: String,
+        deletedAt: Long
+    )
+
+    @Query("""
+    UPDATE kot_history
+    SET
+        status = 'DELETED',
+        deleted = 1,
+        deletedAt = :deletedAt,
+        note = :reason
+    WHERE id = :itemId
+""")
     suspend fun markItemDeleted(
         itemId: String,
+        reason: String,
         deletedAt: Long
     )
 

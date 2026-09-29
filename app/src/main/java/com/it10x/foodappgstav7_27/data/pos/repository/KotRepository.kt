@@ -271,14 +271,17 @@ class KotRepository(
     }
 
     suspend fun markHistoryDeleted(
-        itemId: String
+        itemId: String,
+        reason: String
     ) {
-
         batchDao.markItemDeleted(
             itemId = itemId,
+            reason = reason,
             deletedAt = System.currentTimeMillis()
         )
     }
+
+
 
     suspend fun markHistoryComplimentary(
         tableNo: String,

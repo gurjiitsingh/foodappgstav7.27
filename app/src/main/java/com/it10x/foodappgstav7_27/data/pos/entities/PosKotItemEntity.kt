@@ -47,7 +47,7 @@ val discountEligible: Boolean = true,
     val taxRate: Double,
     val taxType: String,
 
-    val status: String,                 // PENDING / DONE
+    val status: String,                 // PENDING / DONE /DELETED
     val note: String = "",
     val modifiersJson: String = "",
 
