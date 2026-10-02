@@ -429,7 +429,8 @@ fun NavigationHost(
 
                 printerManager = printerManager,
                 ordersViewModel = ordersViewModel,
-                realtimeOrdersViewModel = realtimeOrdersViewModel
+                realtimeOrdersViewModel = realtimeOrdersViewModel,
+                outlet = outlet
             )
         }
 

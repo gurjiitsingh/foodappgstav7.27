@@ -10,7 +10,7 @@ data class OrderProductData(
     val name: String = "",
     val quantity: Int = 0,
 
-    val price: Any? = null,
+    val basePrice: Any? = null,
     val itemSubtotal: Any? = null,
     val taxRate: Any? = null,
     val taxType: String = "",
@@ -30,7 +30,7 @@ data class OrderProductData(
     val modifiers: List<FirestoreModifierData> = emptyList()
 
 ) {
-    fun priceDouble() = price.toDoubleSafe()
+    fun priceDouble() = basePrice.toDoubleSafe()
     fun finalPriceDouble() = finalPrice.toDoubleSafe()
     fun finalTotalDouble() = finalTotal.toDoubleSafe()
 }

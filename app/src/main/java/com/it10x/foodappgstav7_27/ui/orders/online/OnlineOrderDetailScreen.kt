@@ -17,10 +17,10 @@ import androidx.compose.ui.unit.dp
 import com.it10x.foodappgstav7_27.data.online.models.OrderMasterData
 import com.it10x.foodappgstav7_27.data.online.models.OrderProductData
 import com.it10x.foodappgstav7_27.data.online.models.fullDeliveryAddress
+import com.it10x.foodappgstav7_27.utils.formatter.MoneyFormatter
 import com.it10x.foodappgstav7_27.viewmodel.OnlineOrdersViewModel
 import com.it10x.foodappgstav7_27.viewmodel.RealtimeOrdersViewModel
 import kotlinx.coroutines.launch
-import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -28,6 +28,8 @@ fun OnlineOrderDetailScreen(
     order: OrderMasterData,
     ordersViewModel: OnlineOrdersViewModel,
     realtimeOrdersViewModel: RealtimeOrdersViewModel,
+    currencyCode: String,
+    localeTag: String,
     onBack: () -> Unit
 ) {
     val scope = rememberCoroutineScope()
@@ -52,19 +54,15 @@ fun OnlineOrderDetailScreen(
         loading = false
     }
 
-
     // =====================================================
     // SCREEN
     // =====================================================
 
     Scaffold(
-
         containerColor = MaterialTheme.colorScheme.background,
 
         topBar = {
-
             TopAppBar(
-
                 title = {
                     Text(
                         text = "Order #${order.srno}",
@@ -74,11 +72,9 @@ fun OnlineOrderDetailScreen(
                 },
 
                 navigationIcon = {
-
                     IconButton(
                         onClick = onBack
                     ) {
-
                         Icon(
                             imageVector = Icons.Default.ArrowBackIosNew,
                             contentDescription = "Back",
@@ -94,16 +90,13 @@ fun OnlineOrderDetailScreen(
                 )
             )
         }
-
     ) { padding ->
 
         Column(
-
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
                 .padding(12.dp)
-
         ) {
 
             // =================================================
@@ -111,9 +104,7 @@ fun OnlineOrderDetailScreen(
             // =================================================
 
             Card(
-
-                modifier = Modifier
-                    .fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth(),
 
                 colors = CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.surface
@@ -125,7 +116,6 @@ fun OnlineOrderDetailScreen(
             ) {
 
                 Row(
-
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(16.dp),
@@ -152,14 +142,26 @@ fun OnlineOrderDetailScreen(
                         )
 
                         Text(
-                            text = "Item Total: ₹${formatAmount(order.itemTotal)}",
+                            text = "Item Total: ${
+                                MoneyFormatter.format(
+                                    amount = anyToDouble(order.itemTotal),
+                                    currencyCode = currencyCode,
+                                    localeTag = localeTag
+                                )
+                            }",
                             color = MaterialTheme.colorScheme.onSurface
                         )
 
                         order.discountTotal?.let {
 
                             Text(
-                                text = "Discount: ₹${formatAmount(it)}",
+                                text = "Discount: ${
+                                    MoneyFormatter.format(
+                                        amount = anyToDouble(it),
+                                        currencyCode = currencyCode,
+                                        localeTag = localeTag
+                                    )
+                                }",
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
@@ -167,7 +169,13 @@ fun OnlineOrderDetailScreen(
                         order.subTotal?.let {
 
                             Text(
-                                text = "Subtotal: ₹${formatAmount(it)}",
+                                text = "Subtotal: ${
+                                    MoneyFormatter.format(
+                                        amount = anyToDouble(it),
+                                        currencyCode = currencyCode,
+                                        localeTag = localeTag
+                                    )
+                                }",
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                         }
@@ -175,7 +183,13 @@ fun OnlineOrderDetailScreen(
                         order.taxTotal?.let {
 
                             Text(
-                                text = "Tax: ₹${formatAmount(it)}",
+                                text = "Tax: ${
+                                    MoneyFormatter.format(
+                                        amount = anyToDouble(it),
+                                        currencyCode = currencyCode,
+                                        localeTag = localeTag
+                                    )
+                                }",
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
@@ -183,7 +197,13 @@ fun OnlineOrderDetailScreen(
                         order.deliveryFee?.let {
 
                             Text(
-                                text = "Delivery Fee: ₹${formatAmount(it)}",
+                                text = "Delivery Fee: ${
+                                    MoneyFormatter.format(
+                                        amount = anyToDouble(it),
+                                        currencyCode = currencyCode,
+                                        localeTag = localeTag
+                                    )
+                                }",
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
@@ -195,13 +215,18 @@ fun OnlineOrderDetailScreen(
                         order.grandTotal?.let {
 
                             Text(
-                                text = "Grand Total: ₹${formatAmount(it)}",
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary
+                                text = "Grand Total: ${
+                                    MoneyFormatter.format(
+                                        amount = anyToDouble(it),
+                                        currencyCode = currencyCode,
+                                        localeTag = localeTag
+                                    )
+                                }",
+                                color = MaterialTheme.colorScheme.onSurface,
+                                fontWeight = FontWeight.Bold
                             )
                         }
                     }
-
 
                     // =========================================
                     // RIGHT - CUSTOMER + ORDER
@@ -318,18 +343,15 @@ fun OnlineOrderDetailScreen(
                 }
             }
 
-
             Spacer(
                 Modifier.height(12.dp)
             )
-
 
             // =================================================
             // ORDER ITEMS
             // =================================================
 
             Box(
-
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
@@ -344,7 +366,6 @@ fun OnlineOrderDetailScreen(
                         modifier = Modifier.fillMaxSize(),
                         contentAlignment = Alignment.Center
                     ) {
-
                         CircularProgressIndicator()
                     }
 
@@ -361,23 +382,18 @@ fun OnlineOrderDetailScreen(
                         )
                     }
 
-                } else {
+                } else
+                {
 
                     LazyColumn(
                         modifier = Modifier.fillMaxSize()
                     ) {
 
                         items(
-                            items = orderItems,
-                            key = { item ->
-                                // If OrderProductData has an id, use it here.
-                                // Using name as fallback for now.
-                                item.name + item.price + item.quantity
-                            }
+                            items = orderItems
                         ) { item ->
 
                             Column(
-
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(
@@ -391,7 +407,6 @@ fun OnlineOrderDetailScreen(
                                 // =================================
 
                                 Row(
-
                                     modifier = Modifier.fillMaxWidth(),
 
                                     horizontalArrangement =
@@ -416,7 +431,13 @@ fun OnlineOrderDetailScreen(
 
                                     Text(
                                         text =
-                                            "₹${formatAmount(item.itemSubtotal)}",
+                                            MoneyFormatter.format(
+                                                amount = anyToDouble(
+                                                    item.itemSubtotal
+                                                ),
+                                                currencyCode = currencyCode,
+                                                localeTag = localeTag
+                                            ),
 
                                         style =
                                             MaterialTheme.typography.bodyLarge,
@@ -432,11 +453,9 @@ fun OnlineOrderDetailScreen(
                                     )
                                 }
 
-
                                 Spacer(
                                     Modifier.height(3.dp)
                                 )
-
 
                                 // =================================
                                 // QTY × PRICE
@@ -444,8 +463,13 @@ fun OnlineOrderDetailScreen(
 
                                 Text(
                                     text =
-                                        "${item.quantity} × " +
-                                                "₹${formatAmount(item.price)}",
+                                        "${item.quantity} × ${
+                                            MoneyFormatter.format(
+                                                amount = anyToDouble(item.basePrice),
+                                                currencyCode = currencyCode,
+                                                localeTag = localeTag
+                                            )
+                                        }",
 
                                     style =
                                         MaterialTheme.typography.bodySmall,
@@ -454,15 +478,12 @@ fun OnlineOrderDetailScreen(
                                         MaterialTheme.colorScheme.onSurfaceVariant
                                 )
 
-
                                 // =================================
                                 // PRICE PER ITEM
                                 // =================================
 
                                 Row(
-
-                                    modifier =
-                                        Modifier.fillMaxWidth(),
+                                    modifier = Modifier.fillMaxWidth(),
 
                                     horizontalArrangement =
                                         Arrangement.End
@@ -470,7 +491,15 @@ fun OnlineOrderDetailScreen(
 
                                     Text(
                                         text =
-                                            "₹${formatAmount(item.price)} / item",
+                                            "${
+                                                MoneyFormatter.format(
+                                                    amount = anyToDouble(
+                                                        item.basePrice
+                                                    ),
+                                                    currencyCode = currencyCode,
+                                                    localeTag = localeTag
+                                                )
+                                            } / item",
 
                                         style =
                                             MaterialTheme.typography.labelSmall,
@@ -480,9 +509,7 @@ fun OnlineOrderDetailScreen(
                                     )
                                 }
 
-
                                 HorizontalDivider(
-
                                     modifier =
                                         Modifier.padding(top = 8.dp),
 
@@ -497,18 +524,15 @@ fun OnlineOrderDetailScreen(
                 }
             }
 
-
             Spacer(
                 Modifier.height(12.dp)
             )
-
 
             // =================================================
             // ACTION BUTTONS
             // =================================================
 
             Row(
-
                 modifier = Modifier.fillMaxWidth(),
 
                 horizontalArrangement =
@@ -516,25 +540,19 @@ fun OnlineOrderDetailScreen(
             ) {
 
                 Button(
-
                     modifier = Modifier.weight(1f),
 
                     onClick = {
                         ordersViewModel.printOrder(order)
                     }
-
                 ) {
-
                     Text("Print")
                 }
 
-
                 Button(
-
                     modifier = Modifier.weight(1f),
 
                     onClick = {
-
                         scope.launch {
                             realtimeOrdersViewModel
                                 .acknowledgeOrder(order.id)
@@ -542,7 +560,6 @@ fun OnlineOrderDetailScreen(
                     },
 
                     enabled = order.acknowledged != true
-
                 ) {
 
                     Text(
@@ -557,36 +574,27 @@ fun OnlineOrderDetailScreen(
     }
 }
 
-
 // =====================================================
-// NUMBER HELPERS
+// NUMBER HELPER
 // =====================================================
 
 fun anyToDouble(value: Any?): Double {
-
     return when (value) {
+        is Number -> value.toDouble()
 
-        is Double -> value
+        is String -> {
+            value
+                .replace(",", "")
+                .trim()
+                .toDoubleOrNull() ?: 0.0
+        }
 
-        is Long -> value.toDouble()
-
-        is Int -> value.toDouble()
-
-        is Float -> value.toDouble()
-
-        is String ->
-            value.toDoubleOrNull() ?: 0.0
-
-        else -> 0.0
+        else -> {
+            value?.toString()
+                ?.replace(",", "")
+                ?.trim()
+                ?.toDoubleOrNull()
+                ?: 0.0
+        }
     }
-}
-
-
-fun formatAmount(value: Any?): String {
-
-    return String.format(
-        Locale.US,
-        "%.2f",
-        anyToDouble(value)
-    )
 }

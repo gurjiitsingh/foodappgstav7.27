@@ -2,6 +2,8 @@ package com.it10x.foodappgstav7_27.ui.orders.online
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Print
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -10,26 +12,26 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.it10x.foodappgstav7_27.data.online.models.OrderMasterData
-import com.it10x.foodappgstav7_27.utils.formatAmount2
+import com.it10x.foodappgstav7_27.utils.formatter.MoneyFormatter
 import java.text.SimpleDateFormat
 import java.util.*
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Print
-//import com.it10x.foodappgstav7_27.data.online.models.createdAtMillis
-
-//import com.it10x.foodappgstav7_27.data.online.models.safeCreatedAtMillis
 
 @Composable
 fun OnlineOrderTableRow(
     order: OrderMasterData,
+    currencyCode: String,
+    localeTag: String,
     onOrderClick: () -> Unit,
     onPrintClick: () -> Unit
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onOrderClick() } // ✅ click to open detail
-            .padding(vertical = 8.dp, horizontal = 8.dp),
+            .clickable { onOrderClick() }
+            .padding(
+                vertical = 8.dp,
+                horizontal = 8.dp
+            ),
         verticalAlignment = Alignment.CenterVertically
     ) {
 
@@ -49,7 +51,11 @@ fun OnlineOrderTableRow(
 
         // Amount
         Text(
-            text = formatAmount2(order.grandTotal ?: 0.0),
+            text = MoneyFormatter.format(
+                amount = anyToDouble(order.grandTotal),
+                currencyCode = currencyCode,
+                localeTag = localeTag
+            ),
             modifier = Modifier.weight(0.15f),
             fontWeight = FontWeight.Medium
         )
@@ -82,6 +88,7 @@ fun OnlineOrderTableRow(
             style = MaterialTheme.typography.bodySmall
         )
 
+        // Print
         IconButton(
             onClick = { onPrintClick() },
             modifier = Modifier.weight(0.08f)
@@ -92,15 +99,26 @@ fun OnlineOrderTableRow(
                 tint = MaterialTheme.colorScheme.primary
             )
         }
-
     }
 
     Divider()
 }
 
+//private fun anyToDouble(value: Any?): Double {
+//    return when (value) {
+//        is Number -> value.toDouble()
+//        is String -> value.toDoubleOrNull() ?: 0.0
+//        else -> 0.0
+//    }
+//}
 
 private fun formatPosTime(timestamp: Long): String {
     if (timestamp == 0L) return "-"
-    val sdf = SimpleDateFormat("hh:mm a", Locale.getDefault())
+
+    val sdf = SimpleDateFormat(
+        "hh:mm a",
+        Locale.getDefault()
+    )
+
     return sdf.format(Date(timestamp))
 }
