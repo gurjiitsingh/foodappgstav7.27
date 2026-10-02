@@ -10,7 +10,8 @@ import com.google.firebase.Timestamp
 import com.it10x.foodappgstav7_27.data.online.models.OrderMasterData
 import com.it10x.foodappgstav7_27.data.online.repository.RealtimeOrdersRepository
 import com.it10x.foodappgstav7_27.printer.AutoPrintManager
-//********************** PRINT AND RING OLINE ORDERS
+
+// ********************** PRINT AND RING ONLINE ORDERS
 class ServiceRealtimeOrdersListener(
     private val context: Context,
     private val autoPrintManager: AutoPrintManager
@@ -23,6 +24,9 @@ class ServiceRealtimeOrdersListener(
     private val listeningStartedAt = Timestamp.now()
 
     private val ringingLock = Any()
+
+    // Prevent the same order from ringing/printing more than once
+    private val processedOrderIds = mutableSetOf<String>()
 
     fun startListening() {
 
@@ -41,85 +45,73 @@ class ServiceRealtimeOrdersListener(
                         "srno=${order.srno}"
             )
 
-            // =====================================================
-            // 1. ONLY WEB ORDERS SHOULD TRIGGER RING / AUTO PRINT
-            // =====================================================
-
+            // 1. ONLY WEB ORDERS
             if (order.source != "WEB") {
-
                 Log.d(
                     "ONLINE_ORDER",
                     "⛔ Ignoring non-WEB order: " +
                             "id=${order.id}, " +
                             "source=${order.source}"
                 )
-
                 return@startListening
             }
 
-            // =====================================================
             // 2. IGNORE ALREADY PRINTED ORDERS
-            // =====================================================
-
             if (order.printed == true) {
-
                 Log.d(
                     "ONLINE_ORDER",
                     "⛔ Order already printed: ${order.id}"
                 )
-
                 return@startListening
             }
 
-            // =====================================================
             // 3. CHECK CREATED AT
-            // =====================================================
-
             val createdAt = order.createdAt
 
             if (createdAt == null) {
-
                 Log.d(
                     "ONLINE_ORDER",
                     "⛔ Order has no createdAt: ${order.id}"
                 )
-
                 return@startListening
             }
 
-            // =====================================================
             // 4. IGNORE ORDERS THAT EXISTED BEFORE LISTENER STARTED
-            // =====================================================
-
-            if (createdAt.seconds <= listeningStartedAt.seconds) {
-
+            if (createdAt <= listeningStartedAt) {
                 Log.d(
                     "ONLINE_ORDER",
                     "⏭ Old WEB order ignored: ${order.id}"
                 )
-
                 return@startListening
             }
 
-            // =====================================================
-            // 5. NEW WEB ORDER
-            // =====================================================
+            // 5. PREVENT DUPLICATE PROCESSING
+            synchronized(processedOrderIds) {
 
+                if (processedOrderIds.contains(order.id)) {
+
+                    Log.d(
+                        "ONLINE_ORDER",
+                        "⛔ Duplicate WEB order ignored: " +
+                                "${order.id}"
+                    )
+
+                    return@startListening
+                }
+
+                processedOrderIds.add(order.id)
+            }
+
+            // 6. NEW WEB ORDER
             Log.e(
                 "ONLINE_ORDER",
                 "🚨 NEW WEB ORDER: ${order.id}"
             )
 
-            // =====================================================
-            // 6. RING BELL
-            // =====================================================
-
+            // 7. RING
             playRingtone()
 
-            // =====================================================
-            // 7. AUTO PRINT
-            // =====================================================
-
+            // 8. AUTO PRINT
             Log.d(
                 "ONLINE_ORDER",
                 "🖨 Sending WEB order to AutoPrintManager: ${order.id}"
@@ -130,16 +122,13 @@ class ServiceRealtimeOrdersListener(
     }
 
     private fun playRingtone() {
-
         synchronized(ringingLock) {
 
             if (ringtone?.isPlaying == true) {
-
                 Log.d(
                     "ONLINE_ORDER",
                     "🔔 Bell already ringing"
                 )
-
                 return
             }
 
@@ -171,7 +160,9 @@ class ServiceRealtimeOrdersListener(
                                 )
                                 .build()
 
-                        isLooping = true
+                        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+                            isLooping = true
+                        }
 
                         play()
                     }
@@ -190,6 +181,7 @@ class ServiceRealtimeOrdersListener(
             try {
                 ringtone?.stop()
             } catch (e: Exception) {
+
                 Log.e(
                     "ONLINE_ORDER",
                     "Error stopping ringtone",
@@ -211,5 +203,9 @@ class ServiceRealtimeOrdersListener(
         repo.stopListening()
 
         stopRingtone()
+
+        synchronized(processedOrderIds) {
+            processedOrderIds.clear()
+        }
     }
 }
